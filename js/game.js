@@ -74,7 +74,7 @@ function morning(){G.night++;G.phase='day';G.coins=[];
  if(G.night>=NIGHTS){G.phase='win';endGame(true);return}
  let pay=4+(G.home.stipend||0);for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)+(G.mods.farmPlus||0)
   else if(G.mods.payroll&&(s.t==='tower'||s.t==='cats'||s.t==='ducks')&&b.lv&&!b.dead)pay+=G.mods.payroll}
- pay=Math.round(pay*G.mods.gold);const interest=G.mods.interest?Math.min(G.mods.interestCap||8,Math.floor(G.gold*G.mods.interest)):0;G.gold+=pay+interest;
+ pay=Math.round(pay*G.mods.gold);const interest=G.mods.interest?Math.min(G.mods.interestCap||7,Math.floor(G.gold*G.mods.interest)):0;G.gold+=pay+interest;
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}navDirty=1;
  G.home.hp=G.home.max;for(const p of Object.values(G.players)){p.hp=p.max;p.dead=0;p.swing=0;p.skillT=0;p.cd=0}
  for(const u of G.units){u.dead=0;u.hp=u.max}
@@ -97,7 +97,7 @@ function toggleArmy(pid){G.army.mode==='follow'?armyDeploy(pid):armyFollow(pid)}
 function hurtEnemy(e,d,stun,byP){if(e.dead)return;e.hp-=d;e.flash=.12;if(stun)e.stun=Math.max(e.stun||0,stun);
  if(byP===1){sfx('hit');const me=G.players[G.me];if(me)me.combat=G.t;if(G.floats.length<70)G.floats.push({x:e.x+(Math.random()-.5)*.4,y:e.y-ENEMIES[e.k].r*2-.3,txt:''+Math.round(d),t:.25,col:'#fff',sm:1})}
  if(byP==='u'&&G.mods.slow)e.slowT=Math.max(e.slowT||0,1.2);
- if(e.hp<=0){e.dead=1;let g=Math.round(ENEMIES[e.k].gold*G.mods.drop)+(G.mods.luck||0);if(G.mods.bounty&&(e.k==='bear'||e.k==='boss'))g+=Math.round(ENEMIES[e.k].gold*(G.mods.drop||1));G.gold+=g;G.stats.kills++;sfx('kill');G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.coins.push({x:e.x,y:e.y-.4,t:0,n:g});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
+ if(e.hp<=0){e.dead=1;let g=Math.round(ENEMIES[e.k].gold*G.mods.drop)+(G.mods.luck||0);if(G.mods.bounty&&(e.k==='bear'||e.k==='boss'))g+=Math.round(ENEMIES[e.k].gold*(G.mods.drop||1)*G.mods.bounty);G.gold+=g;G.stats.kills++;sfx('kill');G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.coins.push({x:e.x,y:e.y-.4,t:0,n:g});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
 function enemiesNear(x,y,r){return G.enemies.filter(e=>!e.dead&&Math.hypot(e.x-x,e.y-y)<=r+ENEMIES[e.k].r)}
 function nearestEnemy(x,y,r){let best=null,bd=1e9;for(const e of G.enemies){if(e.dead)continue;const d=Math.hypot(e.x-x,e.y-y)-ENEMIES[e.k].r;if(d<=r&&d<bd){bd=d;best=e}}return best}
 function shoot(from,tgt,dmg,kind,spd=10,byP){G.shots.push({x:from.x,y:from.y-.5,tgt,tx:tgt.x,ty:tgt.y,dmg,kind,spd,t:0,byP})}
