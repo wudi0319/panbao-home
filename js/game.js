@@ -87,9 +87,12 @@ function skill(pid){const p=G.players[pid];if(!p||p.dead||p.skillCd>0||G.phase!=
  else if(p.weapon==='frisbee'){for(let i=0;i<10;i++){const a=i/10*Math.PI*2;G.shots.push({x:p.x,y:p.y-.4,vx:Math.cos(a)*9,vy:Math.sin(a)*9,life:.8,dmg:26*(G.mods.pdmg||1),kind:'frisbee',hit:new Set(),t:0,byP:1})}}
  else{for(const e of enemiesNear(p.x,p.y,3.3))hurtEnemy(e,70*(G.mods.pdmg||1),1.6,1);G.shake=.25;G.fx.push({k:'quake',x:p.x,y:p.y,t:0,life:.6,r:3.3})}
  sfx('skill');hooks.toast(W.skill.name+'！');return true}
+function faceAng(p){if(p.face&&(Math.abs(p.face.x)+Math.abs(p.face.y))>1e-6)return Math.atan2(p.face.y,p.face.x);return [Math.PI/2,-Math.PI/2,Math.PI,0][p.dir]||0}
+function inFan(p,e,range){const dx=e.x-p.x,dy=e.y-p.y,d=Math.hypot(dx,dy),er=(ENEMIES[e.k]&&ENEMIES[e.k].r)||.35;if(d>range+er)return false;if(d<.12)return true;
+ let da=Math.atan2(dy,dx)-faceAng(p);while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;return Math.abs(da)<=Math.PI/2+1e-4}
 function playerAttack(p,dt){const W=WEAPONS[p.weapon];p.cd-=dt;p.skillCd=Math.max(0,p.skillCd-dt);if(p.cd>0)return;
  const tg=nearestEnemy(p.x,p.y,W.range);if(!tg)return;p.cd=W.cd;p.swing=.3;p.combat=G.t;p.face={x:tg.x-p.x,y:tg.y-p.y};
- if(W.kind==='melee'){enemiesNear(p.x,p.y,W.range).sort((a,b)=>dist(a,p)-dist(b,p)).slice(0,W.maxHit).forEach(e=>{hurtEnemy(e,W.dmg*(G.mods.pdmg||1),0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:W.range,w:p.weapon})}
+ if(W.kind==='melee'){const ang=Math.atan2(tg.y-p.y,tg.x-p.x);enemiesNear(p.x,p.y,W.range).forEach(e=>{if(!inFan(p,e,W.range))return;hurtEnemy(e,W.dmg*(G.mods.pdmg||1),0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'fan',x:p.x,y:p.y,a:ang,t:0,life:.3,r:W.range,w:p.weapon})}
  else if(W.kind==='ranged')shoot(p,tg,W.dmg*(G.mods.pdmg||1),'frisbee',11,1);
  else{enemiesNear(p.x,p.y,W.range).forEach(e=>hurtEnemy(e,W.dmg*(G.mods.pdmg||1),.3,1));G.shake=Math.max(G.shake,.12);G.fx.push({k:'slam',x:p.x,y:p.y,t:0,life:.35,r:W.range});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:Math.min(W.range,1.8),w:p.weapon})}}
 // 墙段碰撞：敌人整段（含门）都过不去；自己人可以从门洞穿过
@@ -220,36 +223,48 @@ function spawnAt(dir){const D=DIRS[dir],j=(Math.random()-.5)*3;let x=D.x+(dir===
   if(fx!=null){const px=-Math.sin(a),py=Math.cos(a),j2=(Math.random()-.5)*1.2;if(!terrainBlock(fx+px*j2,fy+py*j2,.25)){x=fx+px*j2;y=fy+py*j2}else{x=fx;y=fy}}
   else{x=clamp(x,.6,MAP_W-.6);y=clamp(y,.6,MAP_H-.6)}}
  return{x,y}}
-// 胖宝扔奶瓶：挥动原图已有的那只手臂（不另画手臂），奶瓶比 v0.7.3 小 15%
+// 胖宝扔奶瓶：身体稍稍后仰再前倾抛出，原有手臂只做小幅抬手（贴着身子，不另画肢体），奶瓶比 v0.7.3 小 15%
 const THROW_WIND=.15,THROW_SWING=.10,THROW_FOLLOW=.20,THROW_MAX=THROW_WIND+THROW_SWING+THROW_FOLLOW,THROW_RELEASE=THROW_WIND+THROW_SWING*.92;
 const BOTTLE_FLY=.493,BOTTLE_HOLD=.493;
-// 右臂（面向镜头的右侧）在原图上的轮廓 / 肩 / 手，左臂水平翻转
-const ARM_POLY=[[.667,.442],[.827,.442],[.907,.481],[.907,.548],[.867,.654],[.800,.731],[.720,.808],[.667,.923],[.533,.923],[.520,.817],[.587,.731],[.667,.635],[.680,.519]];
-const ARM_SH=[.760,.500],ARM_HAND=[.600,.846];
+// 只裁下臂+手（肩部蓬袖留在身上），枢轴在袖根关节；抬手向身前收，最大约 32°
+const ARM_POLY=[[.70,.54],[.82,.56],[.87,.64],[.82,.76],[.72,.86],[.62,.94],[.50,.94],[.48,.86],[.54,.76],[.62,.66],[.68,.56]];
+const ARM_SH=[.693,.471],ARM_HAND=[.600,.846],ARM_LIFT=.55;
 function armFlip(side,x){return side<0?1-x:x}
 function armPolyNorm(side){return ARM_POLY.map(([x,y])=>[armFlip(side,x),y])}
 function panbaoPose(){const throwing=(G.home.throwT||0)>0,mx=G.home.throwMax||THROW_MAX,tp=throwing?1-G.home.throwT/mx:-1;
  const face=Math.cos(G.home.throwA||0),side=face>=0?1:-1;
- let lift=0,hold=0;
- if(tp>=0){const t=tp*mx;
-  if(t<THROW_WIND){const q=t/THROW_WIND,e=q*q*(3-2*q);lift=2.55*e;hold=1}
-  else if(t<THROW_WIND+THROW_SWING){const q=(t-THROW_WIND)/THROW_SWING,e=q*.4+q*q*.6;lift=2.55-1.0*e;hold=t<THROW_RELEASE-1e-4?1:0}
-  else{const q=(t-THROW_WIND-THROW_SWING)/THROW_FOLLOW,u=Math.min(1,q/.35),r=q<.35?0:((k=>(k*k*(3-2*k)))((q-.35)/.65));lift=(1.55-.45*u)*(1-r);hold=0}}
- return{tp,lift,hold,side,face,rot:-side*lift}}
+ let lift=0,hold=0,leanT=0,hop=0,squ=1;
+ if(tp>=0){const t=tp*mx,ez=q=>q*q*(3-2*q);
+  if(t<THROW_WIND){const q=t/THROW_WIND,e=ez(q);lift=ARM_LIFT*e;leanT=-.10*e;hop=.018*e;squ=1+.03*e;hold=1}
+  else if(t<THROW_WIND+THROW_SWING){const q=(t-THROW_WIND)/THROW_SWING,e=q*.35+q*q*.65;lift=ARM_LIFT-(ARM_LIFT-.08)*e;leanT=-.10+.22*e;hop=.018+.04*Math.sin(e*Math.PI);squ=1.03-.07*e;hold=t<THROW_RELEASE-1e-4?1:0}
+  else{const q=(t-THROW_WIND-THROW_SWING)/THROW_FOLLOW,e=ez(Math.min(1,q));lift=.08*(1-e);leanT=.12*(1-e);hop=.018*(1-e);squ=.96+(1-.96)*e;hold=0}}
+ return{tp,lift,hold,side,face,rot:side*lift,lean:side*leanT,hop,squ}}
 function panbaoLayout(im){const h=T*.94,w=h*((im&&im.naturalWidth)?im.naturalWidth/im.naturalHeight:.72),X=sx(HOME.x),Y=sy(HOME.y+1.95);return{h,w,ox:X,oy:Y-h*.55,im}}
 function imgToLocal(nx,ny,w,h){return{x:w*(nx-.5),y:-h*.45+h*ny}}
-const _armC={};
-function armSprite(im,side){const k=(im.src||'')+'|'+side+'|'+im.naturalWidth;if(_armC[k])return _armC[k];
+function applyBody(x,y,pose,w,h){const hip=imgToLocal(.5,.90,w,h);let px=x-hip.x,py=y-hip.y-pose.hop*h;
+ const sx=1+(1-pose.squ)*.35,sy=pose.squ;px*=sx;py*=sy;const ca=Math.cos(pose.lean),sa=Math.sin(pose.lean);
+ return{x:hip.x+px*ca-py*sa,y:hip.y+px*sa+py*ca}}
+function softMask(iw,ih,side,blur){const tmp=document.createElement('canvas');tmp.width=iw;tmp.height=ih;const tg=tmp.getContext('2d');
+ tg.beginPath();armPolyNorm(side).forEach(([x,y],i)=>{const X=x*iw,Y=y*ih;i?tg.lineTo(X,Y):tg.moveTo(X,Y)});tg.closePath();tg.fillStyle='#fff';tg.fill();
+ const c=document.createElement('canvas');c.width=iw;c.height=ih;const g=c.getContext('2d');g.filter='blur('+(blur||1.3)+'px)';g.drawImage(tmp,0,0);g.filter='none';return c}
+const _armC={},_bodyC={};
+function armSprite(im,side){const k=(im.src||'')+'|a|'+side+'|'+im.naturalWidth;if(_armC[k])return _armC[k];
  const iw=im.naturalWidth,ih=im.naturalHeight,c=document.createElement('canvas');c.width=iw;c.height=ih;const g=c.getContext('2d');
- g.beginPath();armPolyNorm(side).forEach(([x,y],i)=>{const X=x*iw,Y=y*ih;i?g.lineTo(X,Y):g.moveTo(X,Y)});g.closePath();g.save();g.clip();g.drawImage(im,0,0);g.restore();
+ g.drawImage(im,0,0);g.globalCompositeOperation='destination-in';g.drawImage(softMask(iw,ih,side,1.3),0,0);
  _armC[k]=c;return c}
-function hideOrigArm(im,w,h,side){ctx.save();ctx.beginPath();armPolyNorm(side).forEach(([nx,ny],i)=>{const p=imgToLocal(nx,ny,w,h);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)});ctx.closePath();ctx.clip();
- const mid=imgToLocal(armFlip(side,.68),.68,w,h);
- const stamp=(nx,ny)=>{const t=imgToLocal(armFlip(side,nx),ny,w,h),dx=t.x-mid.x,dy=t.y-mid.y;for(const k of[.3,.55,.85])ctx.drawImage(im,-w/2+dx*k,-h*.45+dy*k,w,h)};
- stamp(.5,.64);stamp(.82,.84);ctx.restore()}
+function bodySprite(im,side){const k=(im.src||'')+'|b|'+side+'|'+im.naturalWidth;if(_bodyC[k])return _bodyC[k];
+ const iw=im.naturalWidth,ih=im.naturalHeight,c=document.createElement('canvas');c.width=iw;c.height=ih;const g=c.getContext('2d');
+ g.drawImage(im,0,0);const mask=softMask(iw,ih,side,1.6),md=mask.getContext('2d').getImageData(0,0,iw,ih).data,id=g.getImageData(0,0,iw,ih),d=id.data;
+ const tx=armFlip(side,.50)*iw,ty=.62*ih;
+ for(let y=0;y<ih;y++)for(let x=0;x<iw;x++){const a=md[(y*iw+x)*4]/255;if(a<.02)continue;const i=(y*iw+x)*4;if(d[i+3]<20)continue;
+  let col=null;const L=Math.hypot(tx-x,ty-y)||1,ux=(tx-x)/L,uy=(ty-y)/L;
+  for(let s=1;s<32;s++){const nx=Math.round(x+ux*s),ny=Math.round(y+uy*s);if(nx<0||ny<0||nx>=iw||ny>=ih)break;
+   const mi=md[(ny*iw+nx)*4]/255,ni=(ny*iw+nx)*4;if(mi<.08&&d[ni+3]>200){const r=d[ni],gv=d[ni+1],b=d[ni+2];if(r-b>70&&gv<220)continue;col=[r,gv,b];break}}
+  if(!col)col=[252,243,218];d[i]=d[i]*(1-a)+col[0]*a;d[i+1]=d[i+1]*(1-a)+col[1]*a;d[i+2]=d[i+2]*(1-a)+col[2]*a;d[i+3]=255}
+ g.putImageData(id,0,0);_bodyC[k]=c;return c}
 function panbaoPawLocal(w,h,pose){const sh=imgToLocal(armFlip(pose.side,ARM_SH[0]),ARM_SH[1],w,h),hd=imgToLocal(armFlip(pose.side,ARM_HAND[0]),ARM_HAND[1],w,h);
  const hx=hd.x-sh.x,hy=hd.y-sh.y,ca=Math.cos(pose.rot),sa=Math.sin(pose.rot);
- return{x:sh.x+hx*ca-hy*sa,y:sh.y+hx*sa+hy*ca,sh}}
+ const paw=applyBody(sh.x+hx*ca-hy*sa,sh.y+hx*sa+hy*ca,pose,w,h);return Object.assign(paw,{sh:applyBody(sh.x,sh.y,pose,w,h),sh0:sh})}
 function panbaoPawWorld(){const im=babyImg.idle0,L=panbaoLayout(im),p=panbaoPose(),paw=panbaoPawLocal(L.w,L.h,p);
  return{x:(L.ox+paw.x-VW/2-OX)/T+cam.x,y:(L.oy+paw.y-VH/2-OY)/T+cam.y}}
 
@@ -371,7 +386,7 @@ function drawPlayer(p){const size=1.3,dir=visDir(p),kind=p.dog,w=p.weapon,sc=1.1
   if(dir===0){// 正面
    if(k>=0){const e=Math.sin(k*Math.PI),lift=.12*e;
     if(w==='frisbee'){hPaw(c,kind,.42,.7-lift);hPaw(c,kind,.58,.7-lift);if(k>.75){c.globalAlpha*=(k-.75)*4;heldW(c,w,sc);}return}
-    c.save();c.translate(.52,.86-lift);c.rotate(-.9+k*2.6);heldW(c,w,sc);c.restore();hPaw(c,kind,.45,.76-lift);hPaw(c,kind,.59,.75-lift);return}
+    c.save();c.translate(.52,.86-lift);c.rotate(w==='spatula'?(-1.55+k*3.1):(-.9+k*2.6));heldW(c,w,sc);c.restore();hPaw(c,kind,.45,.76-lift);hPaw(c,kind,.59,.75-lift);return}
    if(w==='frisbee'){if(!frHide){c.save();c.translate(.5,.92+bob);heldW(c,w,sc);c.restore()}}
    else{c.save();c.translate(.6,.97+bob);c.rotate(.5);heldW(c,w,sc*.98);c.restore();hPaw(c,kind,.64,.86+bob);hPaw(c,kind,.7,.77+bob);return}
    hPaw(c,kind,.41,.75+bob);hPaw(c,kind,.6,.74+bob);return}
@@ -380,7 +395,7 @@ function drawPlayer(p){const size=1.3,dir=visDir(p),kind=p.dog,w=p.weapon,sc=1.1
   if(k>=0){const e=Math.sin(k*Math.PI);
    if(w==='frisbee'){const push=Math.min(1,k*2.5)*(1-Math.max(0,k-.6)*1.5);hPaw(c,kind,.68+.12*push,.74-.02*e);hPaw(c,kind,.72+.13*push,.8-.02*e);
     if(k>.75){c.globalAlpha*=(k-.75)*4;c.save();c.translate(.74,.9);heldW(c,w,sc*.9);c.restore()}}
-   else{const gx=.75+.05*e,gy=.7-.1*e;c.save();c.translate(gx,gy);c.rotate(-.35+k*2.2);heldW(c,w,sc);c.restore();hPaw(c,kind,gx-.03,gy);hPaw(c,kind,gx+.04,gy+.04)}}
+   else{const gx=.75+.05*e,gy=.7-.1*e,sp=w==='spatula';c.save();c.translate(gx,gy);c.rotate(sp?(-1.6+k*3.15):(-.35+k*2.2));heldW(c,w,sc);c.restore();hPaw(c,kind,gx-.03,gy);hPaw(c,kind,gx+.04,gy+.04)}}
   else{if(w==='frisbee'){if(!frHide){c.save();c.translate(.72,.9+bob);c.rotate(.15);heldW(c,w,sc*.9);c.restore()}hPaw(c,kind,.7,.68+bob)}
    else{c.save();c.translate(.74,.84+bob);c.rotate(.38);heldW(c,w,sc);c.restore();hPaw(c,kind,.71,.7+bob);hPaw(c,kind,.77,.76+bob)}}
   c.restore()};
@@ -411,13 +426,13 @@ function drawPanbao(){const cry=G.home.hurtT>0||G.home.hp<G.home.max*.4,throwing
  const L=panbaoLayout(im),h=L.h,w=h*im.naturalWidth/im.naturalHeight;
  ctx.save();ctx.translate(L.ox,L.oy);
  if(!throwing){ctx.drawImage(im,-w/2,-h*.45,w,h);ctx.restore();return}
- const p=panbaoPose();
- ctx.drawImage(im,-w/2,-h*.45,w,h);
- hideOrigArm(im,w,h,p.side);
- const paw=panbaoPawLocal(w,h,p),arm=armSprite(im,p.side);
- ctx.save();ctx.translate(paw.sh.x,paw.sh.y);ctx.rotate(p.rot);ctx.translate(-paw.sh.x,-paw.sh.y);
- ctx.drawImage(arm,-w/2,-h*.45,w,h);ctx.restore();
- if(p.hold){ctx.save();ctx.translate(paw.x,paw.y);ctx.rotate(p.rot*.25);drawBottle(ctx,T*BOTTLE_HOLD);ctx.restore()}
+ const p=panbaoPose(),hip=imgToLocal(.5,.90,w,h);
+ ctx.translate(hip.x,hip.y);ctx.rotate(p.lean);ctx.scale(1+(1-p.squ)*.35,p.squ);ctx.translate(0,-p.hop*h);ctx.translate(-hip.x,-hip.y);
+ ctx.drawImage(bodySprite(im,p.side),-w/2,-h*.45,w,h);
+ const sh=imgToLocal(armFlip(p.side,ARM_SH[0]),ARM_SH[1],w,h);
+ ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(p.rot);ctx.translate(-sh.x,-sh.y);
+ ctx.drawImage(armSprite(im,p.side),-w/2,-h*.45,w,h);ctx.restore();
+ if(p.hold){const paw=panbaoPawLocal(w,h,{...p,lean:0,hop:0,squ:1});ctx.save();ctx.translate(paw.x,paw.y);ctx.rotate(p.rot*.2);drawBottle(ctx,T*BOTTLE_HOLD);ctx.restore()}
  ctx.restore()}
 function drawBuilding(s,b){const X=sx(s.x),Y=sy(s.y),u=T;ctx.save();if(b.dead)ctx.globalAlpha=.45;if(b.flash>0)ctx.filter='brightness(1.8)';ctx.lineWidth=2;ctx.strokeStyle='#3b2a20';ctx.lineJoin='round';
  if(s.t==='wall'){drawWallSpot(s,b)}
@@ -566,7 +581,9 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
   else if(s.kind==='junk'){ctx.rotate(s.t*16);ctx.beginPath();ctx.ellipse(0,0,T*.1,T*.08,0.4,0,7);ctx.fillStyle='#8a5a32';ctx.fill();ctx.stroke();ctx.fillStyle='#c98b52';ctx.beginPath();ctx.arc(-T*.03,-T*.02,T*.035,0,7);ctx.fill()}
   else{ctx.beginPath();ctx.arc(0,0,T*.09,0,7);ctx.fillStyle='#8a8f99';ctx.fill();ctx.stroke()}ctx.restore()}
  for(const f of G.fx){const k=f.t/f.life,X=sx(f.x),Y=sy(f.y)-T*.4;ctx.save();ctx.globalAlpha=1-k;ctx.lineWidth=4;ctx.strokeStyle='#fff';
-  if(f.k==='arc'){const r=f.r*T*.8,a0=f.a-1.1+k*.5,a1=f.a+.9+k*.5,col={spatula:'rgba(143,201,255,.75)',bone:'rgba(255,216,107,.8)'}[f.w]||'rgba(255,255,255,.7)';ctx.beginPath();ctx.arc(X,Y,r,a0,a1);ctx.arc(X,Y,r*.68,a1,a0,true);ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(59,42,32,.5)';ctx.stroke()}else if(f.k==='spin'){ctx.beginPath();ctx.arc(X,Y,f.r*T*(.4+k*.6),0,7);ctx.stroke();ctx.strokeStyle='#ffd23f';ctx.beginPath();ctx.arc(X,Y,f.r*T*(.3+k*.5),k*9,k*9+4);ctx.stroke()}
+  if(f.k==='arc'){const r=f.r*T*.8,a0=f.a-1.1+k*.5,a1=f.a+.9+k*.5,col={spatula:'rgba(143,201,255,.75)',bone:'rgba(255,216,107,.8)'}[f.w]||'rgba(255,255,255,.7)';ctx.beginPath();ctx.arc(X,Y,r,a0,a1);ctx.arc(X,Y,r*.68,a1,a0,true);ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(59,42,32,.5)';ctx.stroke()}
+  else if(f.k==='fan'){const r=f.r*T,a=f.a,a0=a-Math.PI/2,a1=a+Math.PI/2;ctx.globalAlpha=.32*(1-k);ctx.beginPath();ctx.moveTo(X,Y);ctx.arc(X,Y,r,a0,a1);ctx.closePath();ctx.fillStyle='rgba(190,225,255,.7)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,r,a0,a1);ctx.stroke();const sw=a0+k*Math.PI,hw=.55;ctx.globalAlpha=.9*(1-k*.35);ctx.beginPath();ctx.arc(X,Y,r*.98,sw-hw,sw+.15);ctx.arc(X,Y,r*.52,sw+.15,sw-hw,true);ctx.closePath();ctx.fillStyle='rgba(235,248,255,.9)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(X,Y,r*.98,sw-hw,sw+.12);ctx.stroke()}
+  else if(f.k==='spin'){ctx.beginPath();ctx.arc(X,Y,f.r*T*(.4+k*.6),0,7);ctx.stroke();ctx.strokeStyle='#ffd23f';ctx.beginPath();ctx.arc(X,Y,f.r*T*(.3+k*.5),k*9,k*9+4);ctx.stroke()}
   else if(f.k==='slam'||f.k==='quake'){ctx.strokeStyle=f.k==='quake'?'#ffb347':'#fff';ctx.lineWidth=f.k==='quake'?7:4;ctx.beginPath();ctx.ellipse(X,Y+T*.4,f.r*T*(.3+k*.7),f.r*T*(.3+k*.7)*.6,0,0,7);ctx.stroke()}
   else if(f.k==='slash'){ctx.strokeStyle='#fff';ctx.lineWidth=3.5;ctx.beginPath();const a=f.a||0,r=(f.r||.55)*T*(.6+k*.6);ctx.arc(X,Y,r,a-1.1,a+1.1);ctx.stroke();ctx.strokeStyle='rgba(255,200,180,.7)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,r*.7,a-.8,a+.8);ctx.stroke()}
   else if(f.k==='splash'){for(let i=0;i<7;i++){const a=i*0.9-0.3,rr=T*(.1275+k*.3825),sz=T*.085*(1-k);ctx.beginPath();ctx.arc(X+Math.cos(a)*rr,Y+Math.sin(a)*rr*.7-T*.1*k,sz,0,7);ctx.fillStyle=i%2?'#fff':'#e8f4ff';ctx.fill();ctx.strokeStyle='rgba(80,120,160,.45)';ctx.lineWidth=1;ctx.stroke()}}
@@ -586,4 +603,4 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  for(const c of G.coins){const k=Math.min(1,c.t/.7),e=k*k,X0=sx(c.x),Y0=sy(c.y),X=X0+(view.gold.x-X0)*e,Y=Y0+(view.gold.y-Y0)*e-Math.sin(k*Math.PI)*T*1.2;ctx.save();ctx.fillStyle='#ffd23f';ctx.strokeStyle='#b8860b';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,T*.16,0,7);ctx.fill();ctx.stroke();ctx.restore()}
  for(const f of G.floats){ctx.save();ctx.globalAlpha=1-f.t/1.1;ctx.font=`900 ${T*(f.sm?.3:.4)}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#6b4a32';ctx.fillStyle=f.col;ctx.strokeText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.fillText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.restore()}
  if(G.phase==='night')drawOffscreen(W,H);drawMinimap(W,H)}
-window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf,useMap,flowAt,lineClear,pushOut,rebuildNav,bName,bDist,solidAt,enemySolid,enemyBlock,terrainBlock,spawnAt,astar,nearHome,homeUpCost,homeUpChoices,upgradeHome,applyHomeUp,rateStars,makeMods,buyBuff,upgradeHint,unitRespawn,panbaoPawWorld,panbaoPose,THROW_MAX,THROW_RELEASE,BOTTLE_FLY};
+window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf,useMap,flowAt,lineClear,pushOut,rebuildNav,bName,bDist,solidAt,enemySolid,enemyBlock,terrainBlock,spawnAt,astar,nearHome,homeUpCost,homeUpChoices,upgradeHome,applyHomeUp,rateStars,makeMods,buyBuff,upgradeHint,unitRespawn,panbaoPawWorld,panbaoPose,THROW_MAX,THROW_RELEASE,BOTTLE_FLY,inFan,faceAng};

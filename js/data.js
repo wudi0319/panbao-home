@@ -1,7 +1,7 @@
 // 保卫胖宝 — 游戏数据（武器 / 天赋 / 建筑 / 敌人 / 地图 / 每晚的敌人）
 const DOGS={yellow:{name:'鸡毛',ic:'🐶'},white:{name:'小白',ic:'🐩'}};
 const WEAPONS={
- spatula:{name:'锅铲',ic:'🍳',desc:'近战，出手快',kind:'melee',range:1.5,dmg:20,cd:.45,maxHit:3,
+ spatula:{name:'锅铲',ic:'🍳',desc:'近战，前方 180° 扇面挥铲，扇内每个敌人都受伤',kind:'melee',range:1.5,dmg:16,cd:.45,
   skill:{name:'旋风锅铲',cd:9,desc:'转圈拍飞身边所有敌人'}},
  frisbee:{name:'飞盘',ic:'🥏',desc:'远程扔飞盘',kind:'ranged',range:5.5,dmg:15,cd:.6,
   skill:{name:'满天飞盘',cd:10,desc:'向四周扔出 10 个飞盘'}},
