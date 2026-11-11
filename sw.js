@@ -1,5 +1,5 @@
 // 简单离线缓存：安装时先存好核心文件；平时网络优先，断网时用缓存
-const C='panbao-home-v10',V='?v=14';
+const C='panbao-home-v11',V='?v=15';
 const CORE=['./','index.html','manifest.webmanifest','icon-192.png','icon-180.png','style.css'+V,
  ...['sfx','sprites','data','game','ui'].map(f=>'js/'+f+'.js'+V),
  ...['idle0','idle1','cry0','cry1','laugh0','laugh1'].map(f=>'img/baby/beige-'+f+'.png')];

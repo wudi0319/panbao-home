@@ -1,41 +1,83 @@
 // 保卫胖宝 — 界面：开始选择、HUD、按钮、摇杆和键盘
 const $=id=>document.getElementById(id);
-const sel={dog:'yellow',weapon:'spatula',talents:[],map:'yard'};
-const unlocked=(u,r)=>$('unlockAll').checked||!u||(u==='win'?r.wins>0:u==='n3'?r.best>=3:true);
+const sel={dog:'yellow',weapon:'spatula',buffs:[],debuffs:[],map:'yard'};
+const allOn=()=>$('unlockAll').checked;
+const unlocked=(u,r)=>allOn()||!u||(u==='win'?r.wins>0:u==='n3'?r.best>=3:true);
 const unlockText=u=>u==='win'?'通关后解锁':'守过第 3 夜解锁';
 function drawDogIcons(){document.querySelectorAll('#pickDog canvas').forEach(c=>{const x=c.getContext('2d');x.clearRect(0,0,96,96);x.save();x.scale(96,96);S.puppy(x,0,0,false,c.parentNode.dataset.dog);x.restore()})}
-function renderStart(){const r=Game.loadRec();
+function renderStart(){const r=Game.loadRec(),all=allOn();
  $('pickWeapon').innerHTML=Object.entries(WEAPONS).map(([k,w])=>{const ok=unlocked(w.unlock,r);if(!ok&&sel.weapon===k)sel.weapon='spatula';
   return`<button data-w="${k}" class="${sel.weapon===k?'on':''} ${ok?'':'lock'}">${w.ic} ${w.name}<small>${ok?w.desc:'🔒 '+unlockText(w.unlock)}</small></button>`}).join('');
- const all=$('unlockAll').checked;if(!mapUnlocked(r,sel.map,all))sel.map='yard';
- $('pickMap').innerHTML=MAP_ORDER.map(id=>{const m=MAPS[id],ok=mapUnlocked(r,id,all),cleared=mapCleared(r,id),n=MAP_ORDER.indexOf(id)+1;
-  return`<button data-map="${m.id}" class="${sel.map===m.id?'on':''} ${ok?'':'lock'} ${cleared?'cleared':''}">${m.ic} ${m.name}<small>${ok?(cleared?'★ 已通关':'第 '+n+' 关'):'🔒 先通关上一关'}</small></button>`}).join('');
+ if(!mapUnlocked(r,sel.map,all))sel.map='yard';
+ $('pickMap').innerHTML=MAP_ORDER.map(id=>{const m=MAPS[id],ok=mapUnlocked(r,id,all),cleared=mapCleared(r,id),n=MAP_ORDER.indexOf(id)+1,st=(r.maps[id]&&r.maps[id].stars)||0;
+  const mark=!ok?'🔒 先通关上一关':st?starBar(st):('第 '+n+' 关');
+  return`<button data-map="${m.id}" class="${sel.map===m.id?'on':''} ${ok?'':'lock'} ${cleared?'cleared':''}">${m.ic} ${m.name}<small class="stars">${mark}</small></button>`}).join('');
  const sm=MAPS[sel.map];$('mapDesc').textContent=sm?(sm.ic+' '+sm.desc):'';
- sel.talents=sel.talents.filter(k=>unlocked(TALENTS[k].unlock,r));
- $('pickTalent').innerHTML=Object.entries(TALENTS).map(([k,t])=>{const ok=unlocked(t.unlock,r);
-  return`<button data-t="${k}" class="${sel.talents.includes(k)?'on':''} ${ok?'':'lock'} ${t.challenge?'ch':''}">${t.ic} ${t.name}<small>${ok?t.desc:'🔒 '+unlockText(t.unlock)}</small></button>`}).join('');
  document.querySelectorAll('#pickDog button').forEach(b=>b.classList.toggle('on',b.dataset.dog===sel.dog));
- const nClear=MAP_ORDER.filter(id=>mapCleared(r,id)).length;
- $('rec').textContent=r.best||r.wins?`最好成绩：守住 ${r.best} 夜 · 通关 ${r.wins} 次 · 已过 ${nClear}/${MAP_ORDER.length} 关`:'';drawDogIcons()}
+ const nClear=MAP_ORDER.filter(id=>mapCleared(r,id)).length,tot=starTotal(r),bag=starSpendable(r);
+ $('rec').textContent=(r.best||r.wins||tot)?`⭐ 累计 ${tot} 星 · 还可花 ${bag} · 通关 ${r.wins} 次 · 已过 ${nClear}/${MAP_ORDER.length} 关`:'';drawDogIcons()}
+function renderPrep(){const r=Game.loadRec(),all=allOn(),sm=MAPS[sel.map];
+ $('prepTitle').textContent='准备出发';
+ $('prepMap').textContent=sm?(sm.ic+' '+sm.name+' · '+sm.desc):'';
+ $('prepStars').textContent='⭐ 累计 '+starTotal(r)+' 星 · 还可花 '+starSpendable(r);
+ sel.buffs=sel.buffs.filter(k=>buffOwned(r,k,all));
+ sel.debuffs=sel.debuffs.filter(k=>debuffUnlocked(r,k,all));
+ $('pickBuff').innerHTML=Object.entries(BUFFS).map(([k,b])=>{
+  const un=buffUnlocked(r,k,all),own=buffOwned(r,k,all),on=sel.buffs.includes(k),c=b.cost||0;
+  if(!un)return`<button data-b="${k}" class="lock">${b.ic} ${b.name}<small>🔒 ${condText(b.unlock)}</small></button>`;
+  if(!own)return`<button data-b="${k}" class="buy">${b.ic} ${b.name}<small>兑换 ${c} 星 · ${b.desc}</small></button>`;
+  return`<button data-b="${k}" class="${on?'on':''}">${b.ic} ${b.name}<small>${b.desc}</small></button>`}).join('');
+ $('pickDebuff').innerHTML=Object.entries(DEBUFFS).map(([k,d])=>{
+  const un=debuffUnlocked(r,k,all),on=sel.debuffs.includes(k);
+  if(!un)return`<button data-d="${k}" class="lock">${d.ic} ${d.name}<small>🔒 ${condText(d.unlock)}</small></button>`;
+  return`<button data-d="${k}" class="${on?'on':''}">${d.ic} ${d.name}<small>+${d.star} 星 · ${d.desc}</small></button>`}).join('');
+ const rg=starRange(sel.debuffs);
+ $('prepForecast').textContent='本关通关可得 '+rg.min+'–'+rg.max+' 星'+(sel.debuffs.length?'（挑战 +'+debuffStars(sel.debuffs)+'）':'')+' · 已选加成 '+sel.buffs.length+'/'+BUFF_MAX}
+function openPrep(){renderPrep();$('start').classList.add('hidden');$('prep').classList.remove('hidden')}
+function closePrep(){$('prep').classList.add('hidden');$('start').classList.remove('hidden');renderStart()}
+function startRun(){Game.newGame({dog:sel.dog,weapon:sel.weapon,map:sel.map,buffs:sel.buffs,debuffs:sel.debuffs});paused=false;$('pause').classList.add('hidden');$('start').classList.add('hidden');$('prep').classList.add('hidden');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('hMe').textContent=DOGS[sel.dog].ic;tut.start();SFX.play('click');measure()}
 $('pickDog').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel.dog=b.dataset.dog;renderStart()};
 $('pickWeapon').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.weapon=b.dataset.w;renderStart()};
 $('pickMap').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.map=b.dataset.map;renderStart()};
-$('pickTalent').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');const k=b.dataset.t,i=sel.talents.indexOf(k);
- if(i>=0)sel.talents.splice(i,1);else{if(sel.talents.length>=2)sel.talents.shift();sel.talents.push(k)}renderStart()};
-$('unlockAll').onchange=renderStart;
-$('goBtn').onclick=()=>{Game.newGame(sel);paused=false;$('pause').classList.add('hidden');$('start').classList.add('hidden');$('end').classList.add('hidden');$('hMe').textContent=DOGS[sel.dog].ic;tut.start();SFX.play('click');measure()};
-$('againBtn').onclick=()=>{SFX.play('click');$('end').classList.add('hidden');renderStart();$('start').classList.remove('hidden')};
+$('unlockAll').onchange=()=>{renderStart();if(!$('prep').classList.contains('hidden'))renderPrep()};
+$('goBtn').onclick=()=>{SFX.play('click');openPrep()};
+$('prepBack').onclick=()=>{SFX.play('click');closePrep()};
+$('prepGo').onclick=()=>startRun();
+$('pickBuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.b,r=Game.loadRec(),all=allOn();
+ if(b.classList.contains('lock'))return toast(condText(BUFFS[k].unlock)||'还没解锁哦');
+ if(b.classList.contains('buy')){if(starSpendable(r)<(BUFFS[k].cost||0))return toast('星星不够，再去通关攒一点吧');Game.saveRec(buyBuff(r,k));toast('兑换了 '+BUFFS[k].ic+' '+BUFFS[k].name+'！');if(sel.buffs.length<BUFF_MAX&&!sel.buffs.includes(k))sel.buffs.push(k);renderPrep();return}
+ const i=sel.buffs.indexOf(k);if(i>=0)sel.buffs.splice(i,1);else{if(sel.buffs.length>=BUFF_MAX){toast('最多带 '+BUFF_MAX+' 个加成');return}sel.buffs.push(k)}renderPrep()};
+$('pickDebuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.d;
+ if(b.classList.contains('lock'))return toast(condText(DEBUFFS[k].unlock)||'还没解锁哦');
+ const i=sel.debuffs.indexOf(k);if(i>=0)sel.debuffs.splice(i,1);else{if(sel.debuffs.length>=DEBUFF_MAX){toast('最多选 '+DEBUFF_MAX+' 个挑战');return}sel.debuffs.push(k)}renderPrep()};
+$('againBtn').onclick=()=>{SFX.play('click');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('prep').classList.add('hidden');renderStart();$('start').classList.remove('hidden')};
 let toastT;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400)}
 Game.hooks.toast=toast;Game.hooks.sfx=k=>SFX.play(k);Game.hooks.coin=()=>{const g=$('hGold');g.classList.remove('bump');void g.offsetWidth;g.classList.add('bump')};
+function freshUnlocks(was,r){const nu=[];if(r.wins>0&&!(was.wins>0))nu.push('🦴 骨头棒槌');
+ const mid=(Game.G&&Game.G.map)||'yard',ix=MAP_ORDER.indexOf(mid);if(mapCleared(r,mid)&&!(was.maps&&was.maps[mid]&&was.maps[mid].wins>0)&&ix>=0&&ix<MAP_ORDER.length-1){const nxt=MAPS[MAP_ORDER[ix+1]];nu.push(nxt.ic+' '+nxt.name)}
+ for(const [k,b] of Object.entries(BUFFS))if(b.unlock&&!condOk(b.unlock,was,false)&&condOk(b.unlock,r,false))nu.push(b.ic+' '+b.name);
+ for(const [k,d] of Object.entries(DEBUFFS))if(d.unlock&&!condOk(d.unlock,was,false)&&condOk(d.unlock,r,false))nu.push(d.ic+' '+d.name);
+ return nu}
 Game.hooks.end=(win,was,r)=>{const G=Game.G;$('endIcon').textContent=win?'🏆':'😭';$('endTitle').textContent=win?'胖宝安全啦！':'家被攻破了…';
- $('endText').textContent=win?`守住了全部 ${NIGHTS} 个晚上，打倒 ${G.stats.kills} 个敌人！`:`守住了 ${G.night} 夜，打倒 ${G.stats.kills} 个敌人。再试一次吧！`;
- const nu=[];if(r.wins>0&&!(was.wins>0))nu.push('🦴 骨头棒槌');if(r.best>=3&&!(was.best>=3))nu.push('🏠 坚固的家','🐺 挑战：狼来了');
- const mid=G.map||'yard',ix=MAP_ORDER.indexOf(mid);if(win&&ix>=0&&ix<MAP_ORDER.length-1){const wasClear=was.maps&&was.maps[mid]&&was.maps[mid].wins>0;if(!wasClear){const nxt=MAPS[MAP_ORDER[ix+1]];nu.push(nxt.ic+' '+nxt.name)}}
- $('endUnlock').textContent=nu.length?'新解锁：'+nu.join('、'):'';setTimeout(()=>$('end').classList.remove('hidden'),600)};
+ if(win){const got=G.stats.stars||0,gain=G.stats.starGain||0,frac=Math.round(100*G.home.hp/G.home.max);
+  $('endStars').textContent=starBar(got);$('endStars').classList.remove('hidden');
+  $('endText').textContent=`守住了全部 ${NIGHTS} 个晚上，打倒 ${G.stats.kills} 个敌人！家还剩 ${frac}% 血`+(G.stats.broke?'，有建筑被打坏过。':'，建筑都保住了。')+` 获得 ${got} 星`+(gain?`（新攒 ${gain} 颗，还可花 ${starSpendable(r)}）`:'（这关最高星没涨）');}
+ else{$('endStars').textContent='';$('endStars').classList.add('hidden');$('endText').textContent=`守住了 ${G.night} 夜，打倒 ${G.stats.kills} 个敌人。再试一次吧！`}
+ const nu=freshUnlocks(was,r);$('endUnlock').textContent=nu.length?'新解锁：'+nu.join('、'):'';setTimeout(()=>$('end').classList.remove('hidden'),600)};
+let homePick=null;
+function openHomeUp(){const G=Game.G,c=Game.homeUpCost();if(c==null)return;
+ homePick=Game.homeUpChoices();$('homeUpTitle').textContent='🏠 升级老家（第 '+(G.home.up+1)+' 次）';
+ $('homeUpSub').textContent='花 '+c+' 金币选一个加成，本局还能再升 '+(3-G.home.up)+' 次（含这次）';
+ $('homeUpChoices').innerHTML=homePick.map(id=>{const u=HOME_UPS[id];return`<button data-h="${id}">${u.ic} ${u.name}<small>${u.desc}</small></button>`}).join('');
+ $('homeUp').classList.remove('hidden');SFX.play('click')}
+function closeHomeUp(){$('homeUp').classList.add('hidden');homePick=null}
+$('homeUpChoices').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=me();if(p&&Game.upgradeHome(p.id,b.dataset.h))closeHomeUp()};
+$('homeUpCancel').onclick=()=>{SFX.play('click');closeHomeUp()};
 // ---- 按钮 ----
 const me=()=>Game.G&&Game.G.players[Game.G.me];
 const tap=(id,fn)=>$(id).addEventListener('click',e=>{e.preventDefault();fn()});
 tap('buildBtn',()=>{const p=me();if(p&&Game.build(p.id))tut.on('build')});
+tap('homeBtn',()=>{const p=me();if(p)openHomeUp()});
 tap('nightBtn',()=>{Game.startNight();tut.on('night')});
 tap('skillBtn',()=>{const p=me();if(p&&p.skillCd<=0&&Game.skill(p.id))tut.on('skill')});
 tap('followBtn',()=>{const p=me();if(p)Game.armyFollow(p.id)});tap('deployBtn',()=>{const p=me();if(p)Game.armyDeploy(p.id)});
@@ -45,7 +87,7 @@ function setPause(v){const G=Game.G;if(!G||!$('start').classList.contains('hidde
 function muteLabel(){$('muteBtn').textContent=SFX.muted?'🔇 音效：关':'🔊 音效：开';$('pauseBtn').dataset.m=SFX.muted?'1':''}
 tap('pauseBtn',()=>{SFX.play('click');setPause(!paused)});tap('resumeBtn',()=>{SFX.play('click');setPause(false)});
 tap('muteBtn',()=>{SFX.setMuted(!SFX.muted);muteLabel();SFX.play('click')});
-tap('quitBtn',()=>{setPause(false);Game.G.phase='lose';$('end').classList.add('hidden');renderStart();$('start').classList.remove('hidden')});
+tap('quitBtn',()=>{setPause(false);Game.G.phase='lose';$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('prep').classList.add('hidden');renderStart();$('start').classList.remove('hidden')});
 muteLabel();
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true)});
 // ---- 摇杆：左半屏任意位置按下都能出摇杆（浮动摇杆），键盘 WASD ----
@@ -61,7 +103,7 @@ $('map').addEventListener('pointerdown',e=>{const m=Game.view.mm;if(Game.G&&e.cl
 for(const el of[joy,$('map')]){el.addEventListener('pointermove',e=>{if(e.pointerId===jid)joyMove(e)});el.addEventListener('pointerup',joyEnd);el.addEventListener('pointercancel',joyEnd)}
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='p'||k==='escape'){if(!e.repeat)setPause(!paused);return}if(paused)return;keys.add(k);if(e.repeat)return;
  if(['w','a','s','d','arrowleft','arrowright','arrowup','arrowdown'].includes(k))tut.on('move');
- if(k==='e'||k==='enter')$('buildBtn').classList.contains('hidden')||$('buildBtn').click();
+ if(k==='e'||k==='enter'){if(!$('buildBtn').classList.contains('hidden'))$('buildBtn').click();else if(!$('homeBtn').classList.contains('hidden'))$('homeBtn').click()}
  if(k===' '){e.preventDefault();$('skillBtn').classList.contains('hidden')||$('skillBtn').click()}
  if(k==='n')$('nightBtn').classList.contains('hidden')||$('nightBtn').click();if(k==='f'){const p=me();if(p&&Game.G.units.length)Game.toggleArmy(p.id)}});
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));addEventListener('blur',()=>keys.clear());
@@ -83,14 +125,16 @@ function gview(){return Game.view}
 function placeToast(){const h=$('hint'),hb=h.textContent?h.getBoundingClientRect().bottom:$('hud').getBoundingClientRect().bottom;stage.style.setProperty('--toastt',Math.round(hb+6)+'px');Game.view.hintB=hb}
 function measure(){const h=$('hud').getBoundingClientRect(),g=$('hGold').getBoundingClientRect();Game.view.top=h.bottom;$('stage').style.setProperty('--hudb',Math.round(h.bottom)+'px');Game.view.joyTop=$('joy').getBoundingClientRect().top;placeToast();Game.view.gold={x:g.left+g.width/2,y:g.top+g.height/2}}
 addEventListener('resize',()=>setTimeout(measure,50));
-function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day';
+function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day',play=day||G.phase==='night';
  setT('hGold','💰 '+G.gold);setT('hNight',day?`☀️ 第 ${G.night+1} 天 · 共 ${NIGHTS} 夜`:G.phase==='night'?`🌙 第 ${G.night+1} 夜 / ${NIGHTS}`:G.phase==='win'?'🏆 通关啦':'💔 失败');
  setW('hHome',100*G.home.hp/G.home.max);setW('hHp',p.dead?0:100*p.hp/p.max);
- const s=day&&!p.dead?Game.nearSpot(p):null;
+ const s=play&&day&&!p.dead?Game.nearSpot(p):null;
  if(s){const b=G.b[s.id],c=Game.nextCost(s);setH('buildBtn',false);setT('buildBtn',c==null?`${BUILD[s.t].ic} ${bName(s)} 已满级`:`${BUILD[s.t].ic} ${b.lv?'升级':'建造'}${bName(s)}${b.lv?' → '+(b.lv+1)+'级':''} 💰${c}`);$('buildBtn').classList.toggle('poor',c==null||G.gold<c)}else setH('buildBtn',true);
- setH('nightBtn',!day);
+ const hc=play&&day&&!p.dead&&Game.nearHome(p)?Game.homeUpCost():null;
+ if(hc!=null){setH('homeBtn',false);setT('homeBtn',`🏠 升级老家（${G.home.up+1}/3）💰${hc}`);$('homeBtn').classList.toggle('poor',G.gold<hc)}else setH('homeBtn',true);
+ setH('nightBtn',!day||!play);
  const W=WEAPONS[p.weapon];setH('skillBtn',G.phase!=='night');setT('skillName',W.skill.name);setT('skillCd',p.skillCd>0?''+Math.ceil(p.skillCd):'');
- setH('armyRow',!G.units.length);$('followBtn').classList.toggle('on',G.army.mode==='follow');$('deployBtn').classList.toggle('on',G.army.mode==='deploy');
+ setH('armyRow',!play||!G.units.length);$('followBtn').classList.toggle('on',G.army.mode==='follow');$('deployBtn').classList.toggle('on',G.army.mode==='deploy');
  const mm=Math.round(Game.view.mm.s)+(Game.view.mm.big?1:0);if(mm!==hudMM){hudMM=mm;const M=Game.view.mm,st=$('stage').style,wide=innerWidth-M.s>300;
   // 小地图放大时：横屏把提示放到地图右边；竖屏放到地图下面，不挡地图
   st.setProperty('--mm',(!M.big||wide?Math.round(M.s):0)+'px');st.setProperty('--hudb',Math.round(M.big&&!wide?M.y+M.s+4:$('hud').getBoundingClientRect().bottom)+'px');placeToast()}
@@ -102,7 +146,8 @@ function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day';
 // ---- 主循环 ----
 let last=performance.now(),fpsN=0,fpsT=0;const showFps=/fps/.test(location.search);
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const G=Game.G;
- if(G&&!paused&&G.phase!=='win'&&G.phase!=='lose'&&$('start').classList.contains('hidden')){G.input[G.me]=readInput();Game.step(dt)}
+ const blocked=paused||!$('homeUp').classList.contains('hidden')||!$('prep').classList.contains('hidden')||!$('start').classList.contains('hidden');
+ if(G&&!blocked&&G.phase!=='win'&&G.phase!=='lose'){G.input[G.me]=readInput();Game.step(dt)}else if(G)G.input[G.me]={x:0,y:0}
  Game.render();hud();if(showFps){fpsN++;fpsT+=dt;if(fpsT>1){$('hint').textContent+=' · '+fpsN+'fps';fpsN=0;fpsT=0}}requestAnimationFrame(frame)}
 renderStart();measure();requestAnimationFrame(frame);
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});

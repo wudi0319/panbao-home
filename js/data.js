@@ -7,12 +7,41 @@ const WEAPONS={
   skill:{name:'满天飞盘',cd:10,desc:'向四周扔出 10 个飞盘'}},
  bone:{name:'骨头棒槌',ic:'🦴',desc:'慢，但一下砸一片',kind:'area',range:2.1,dmg:42,cd:1.2,
   skill:{name:'震地一击',cd:12,desc:'大范围重击并晕住敌人'},unlock:'win'}};
-const TALENTS={
- piggy:{name:'存钱罐',ic:'🐷',desc:'开局 +10 金币，早上收入 +30%'},
- pets:{name:'小动物加油',ic:'💪',desc:'小猫小鸭血量和攻击 +35%'},
- tough:{name:'结实身体',ic:'❤️',desc:'自己血量 +60%'},
- stone:{name:'坚固的家',ic:'🏠',desc:'家和城墙血量 +50%',unlock:'n3'},
- wolfy:{name:'挑战：狼来了',ic:'🐺',desc:'敌人更多（+30%）、血量 +60%、攻击 +25%，金币 ×1.25',challenge:1,unlock:'n3'}};
+const TALENTS={}; // 旧天赋已并入加成 / 挑战
+const BUFF_MAX=3,DEBUFF_MAX=3,HOME_UP_COST=[8,12,18];
+const BUFFS={
+ piggy:{name:'存钱罐',ic:'🐷',desc:'开局 +10 金币，早上收入 +30%',cost:0},
+ pets:{name:'小动物加油',ic:'💪',desc:'小猫小鸭血量和攻击 +35%',cost:0},
+ tough:{name:'结实身体',ic:'❤️',desc:'自己的血量 +60%',cost:0},
+ stone:{name:'坚固的家',ic:'🏠',desc:'家和城墙血量 +50%',cost:3,unlock:{best:3}},
+ tower:{name:'弹弓熟练',ic:'🏹',desc:'弹弓塔伤害 +25%',cost:3,unlock:{map:'barbican'}},
+ harvest:{name:'丰收年',ic:'🌾',desc:'每座菜园早上多收 2 金',cost:4,unlock:{stars:6}},
+ swift:{name:'身手敏捷',ic:'⚡',desc:'技能冷却缩短 20%',cost:4,unlock:{map:'garden'}},
+ might:{name:'热乎乎的手',ic:'🔥',desc:'自己攻击 +20%',cost:5,unlock:{stars:8}},
+ cheapw:{name:'砌墙能手',ic:'🧱',desc:'城墙每级少花 1 金币',cost:5,unlock:{stars:10}},
+ luck:{name:'幸运星',ic:'🌟',desc:'打倒敌人多掉 1 金',cost:5,unlock:{map:'bridge'}},
+ pals:{name:'多一只伙伴',ic:'🐾',desc:'每个营地多 1 只小动物',cost:6,unlock:{map:'fields'}},
+ feast:{name:'满桌好菜',ic:'🍖',desc:'开局再 +8 金，掉落 +20%',cost:8,unlock:{map:'mountain'}}
+};
+const DEBUFFS={
+ wolfy:{name:'狼来了',ic:'🐺',desc:'敌人更多、更厚、更疼',star:1,unlock:{best:3}},
+ zoom:{name:'疾风脚',ic:'💨',desc:'敌人走得更快',star:1,unlock:{map:'yard'}},
+ poor:{name:'歉收年',ic:'🪙',desc:'早上收入和掉落都少 30%',star:1,unlock:{stars:5}},
+ late:{name:'长夜漫漫',ic:'🌙',desc:'每夜敌人再多一些，第一夜就有狼',star:1,unlock:{map:'barbican'}},
+ smash:{name:'拆家党',ic:'🪓',desc:'敌人拆建筑更凶',star:1,unlock:{stars:8}},
+ bossy:{name:'大王发怒',ic:'👑',desc:'熊大王更结实，来得更早',star:1,unlock:{map:'bridge'}},
+ storm:{name:'连绵阴雨',ic:'🌧️',desc:'自己和弹弓塔伤害变低',star:1,unlock:{map:'fields'}},
+ nightmare:{name:'噩梦夜',ic:'👿',desc:'敌人又多又快又厚',star:2,unlock:{map:'mountain'}}
+};
+const HOME_UPS={
+ thick:{name:'厚墙家',ic:'🧱',desc:'家的最大生命 +80，并立刻回满'},
+ bottle:{name:'多多奶瓶',ic:'🍼',desc:'胖宝扔奶瓶更快、更远、更疼'},
+ stipend:{name:'早点名',ic:'💰',desc:'每天早上额外 +4 金币'},
+ regen:{name:'暖暖家',ic:'🩹',desc:'家里会慢慢回血'},
+ aura:{name:'加油鼓劲',ic:'📣',desc:'家附近的小动物攻击更高'},
+ beds:{name:'多一张小床',ic:'🐣',desc:'每个营地多 1 只小动物'},
+ cozy:{name:'热乎乎的炉子',ic:'🔥',desc:'靠近家的敌人走得更慢'}
+};
 // 建筑每级数值（下标 0 = 1级）
 const BUILD={
  wall:{name:'城墙',ic:'🧱',cost:[3,6,12],hp:[150,300,520]},
@@ -162,12 +191,39 @@ function refreshDirs(){DIRS={N:{x:HOME.x,y:-.5,cn:'北'},S:{x:HOME.x,y:MAP_H+.5,
 function useMap(id){MAP=MAPS[id]||MAPS.yard;MAP_W=MAP.w;MAP_H=MAP.h;HOME=MAP.home;SPOTS=MAP.spots;NIGHTS=MAP.nights||7;refreshDirs();return MAP}
 useMap('yard');
 function nightDirs(n){const a=(MAP&&MAP.nightsDir)||ND_STD;return a[Math.min(n,a.length)-1]||a[a.length-1]}
-function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5;
+function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5,m=(typeof G!=='undefined'&&G&&G.mods)||{};
  const add=(k,c0,t0=0,t1=dur)=>{const cnt=k==='boss'?c0:Math.round(c0*cm);for(let i=0;i<cnt;i++)out.push({t:t0+(t1-t0)*(cnt>1?i/(cnt-1):.5)+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
- add('raccoon',4+n*2);if(n>=2)add('wolf',n*2-1,4);if(n>=3)add('bear',n-2,8);if(n===NIGHTS)add('boss',1,dur*.6,dur*.6);
+ add('raccoon',4+n*2);if(n>=2||m.earlyWolf)add('wolf',n>=2?n*2-1:2,4);if(n>=3)add('bear',n-2,8);
+ if(n===NIGHTS){const bt=dur*(m.bossEarly||.6);add('boss',1,bt,bt)}
  return out.sort((a,b)=>a.t-b.t)}
-function normRec(r){r=r||{};r.best=r.best||0;r.wins=r.wins||0;r.maps=r.maps||{};
+function starTotal(r){return MAP_ORDER.reduce((s,id)=>s+((r&&r.maps&&r.maps[id]&&r.maps[id].stars)||0),0)}
+function starSpendable(r){return Math.max(0,starTotal(r)-(r&&r.starSpent||0))}
+function starBar(n,max=5){n=Math.max(0,Math.min(max,n|0));return '★'.repeat(n)+'☆'.repeat(max-n)}
+function condOk(c,r,all){if(all||!c)return true;if(c.win)return (r.wins||0)>=c.win;if(c.best)return (r.best||0)>=c.best;if(c.map)return mapCleared(r,c.map);if(c.stars)return starTotal(r)>=c.stars;return true}
+function condText(c){if(!c)return '';if(c.win)return '先通关任意一关';if(c.best)return '先守过第 '+c.best+' 夜';if(c.map)return '先通关「'+((MAPS[c.map]||{}).name||c.map)+'」';if(c.stars)return '累计 '+c.stars+' 星解锁';return ''}
+function buffOwned(r,id,all){const b=BUFFS[id];if(!b)return false;if(all)return true;if(!b.cost&&!b.unlock)return true;return !!(r.buffs&&r.buffs.includes(id))}
+function buffUnlocked(r,id,all){return condOk((BUFFS[id]||{}).unlock,r,all)}
+function debuffUnlocked(r,id,all){return condOk((DEBUFFS[id]||{}).unlock,r,all)}
+function makeMods(buffs,debuffs,diff){const B=new Set(buffs||[]),D=new Set(debuffs||[]),d=diff||{};
+ return{gold:(B.has('piggy')?1.3:1)*(D.has('poor')?0.7:1),start:(B.has('piggy')?10:0)+(B.has('feast')?8:0),
+  pet:B.has('pets')?1.35:1,hp:B.has('tough')?1.6:1,stone:B.has('stone')?1.5:1,
+  ehp:(d.ehp||1)*(D.has('wolfy')?1.4:1)*(D.has('nightmare')?1.2:1),
+  edmg:(d.edmg||1)*(D.has('wolfy')?1.2:1),esmash:D.has('smash')?1.5:1,
+  count:(d.count||1)*(D.has('wolfy')?1.25:1)*(D.has('late')?1.3:1)*(D.has('nightmare')?1.15:1),
+  drop:(D.has('poor')?0.7:1)*(B.has('feast')?1.2:1),
+  espd:(d.spd||1)*(D.has('zoom')?1.25:1)*(D.has('nightmare')?1.15:1),
+  tdmg:(B.has('tower')?1.25:1)*(D.has('storm')?0.8:1),pdmg:(B.has('might')?1.2:1)*(D.has('storm')?0.8:1),
+  scd:B.has('swift')?0.8:1,wcut:B.has('cheapw')?1:0,farmPlus:B.has('harvest')?2:0,luck:B.has('luck')?1:0,
+  beds:B.has('pals')?1:0,earlyWolf:D.has('late')?1:0,bossHp:D.has('bossy')?1.5:1,bossEarly:D.has('bossy')?.4:.6}}
+function qualityStars(G){if(!G)return 0;const frac=G.home.max?G.home.hp/G.home.max:0;let q=1;if(frac>=.5)q=2;if(frac>=.8&&!(G.stats&&G.stats.broke))q=3;return q}
+function debuffStars(list){return (list||[]).reduce((s,id)=>s+((DEBUFFS[id]&&DEBUFFS[id].star)||0),0)}
+function rateStars(G){return Math.min(5,qualityStars(G)+debuffStars(G&&G.debuffs))}
+function starRange(debuffs){const extra=debuffStars(debuffs);return{min:Math.min(5,1+extra),max:Math.min(5,3+extra)}}
+function normRec(r){r=r||{};r.best=r.best||0;r.wins=r.wins||0;r.maps=r.maps||{};r.starSpent=r.starSpent||0;r.buffs=r.buffs||[];
  if(r.wins>0&&!(r.maps.yard&&r.maps.yard.wins)){r.maps.yard={wins:r.wins,best:r.best||0}}
+ for(const id of Object.keys(r.maps)){const m=r.maps[id];m.stars=m.stars||0;if(m.wins>0&&m.stars<1)m.stars=1}
+ if(r.best>=3&&!r.buffs.includes('stone'))r.buffs.push('stone');
  return r}
 function mapCleared(r,id){return !!(r&&r.maps&&r.maps[id]&&r.maps[id].wins>0)}
 function mapUnlocked(r,id,all){if(all)return true;const i=MAP_ORDER.indexOf(id);return i<=0||mapCleared(r,MAP_ORDER[i-1])}
+function buyBuff(r,id){const b=BUFFS[id];if(!b||buffOwned(r,id,false)||!buffUnlocked(r,id,false))return r;const c=b.cost||0;if(starSpendable(r)<c)return r;r.buffs=r.buffs||[];r.buffs.push(id);r.starSpent=(r.starSpent||0)+c;return r}
