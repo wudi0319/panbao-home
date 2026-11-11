@@ -73,7 +73,8 @@ const setT=(id,v)=>{const el=$(id);if(el._v!==v){el._v=v;el.textContent=v}};
 const setH=(id,h)=>{const el=$(id);if(el._h!==h){el._h=h;el.classList.toggle('hidden',h)}};
 const setW=(id,w)=>{const el=$(id);w=Math.round(w)+'%';if(el._w!==w){el._w=w;el.style.width=w;el.style.background=parseFloat(w)<30?'#ff5a5a':parseFloat(w)<60?'#ffb347':'#6fd07a'}};
 function gview(){return Game.view}
-function measure(){const h=$('hud').getBoundingClientRect(),g=$('hGold').getBoundingClientRect();Game.view.top=h.bottom;Game.view.gold={x:g.left+g.width/2,y:g.top+g.height/2}}
+function placeToast(){const h=$('hint'),hb=h.textContent?h.getBoundingClientRect().bottom:$('hud').getBoundingClientRect().bottom;stage.style.setProperty('--toastt',Math.round(hb+6)+'px');Game.view.hintB=hb}
+function measure(){const h=$('hud').getBoundingClientRect(),g=$('hGold').getBoundingClientRect();Game.view.top=h.bottom;$('stage').style.setProperty('--hudb',Math.round(h.bottom)+'px');Game.view.joyTop=$('joy').getBoundingClientRect().top;placeToast();Game.view.gold={x:g.left+g.width/2,y:g.top+g.height/2}}
 addEventListener('resize',()=>setTimeout(measure,50));
 function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day';
  setT('hGold','💰 '+G.gold);setT('hNight',day?`☀️ 第 ${G.night+1} 天 · 共 ${NIGHTS} 夜`:G.phase==='night'?`🌙 第 ${G.night+1} 夜 / ${NIGHTS}`:G.phase==='win'?'🏆 通关啦':'💔 失败');
@@ -83,11 +84,13 @@ function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day';
  setH('nightBtn',!day);
  const W=WEAPONS[p.weapon];setH('skillBtn',G.phase!=='night');setT('skillName',W.skill.name);setT('skillCd',p.skillCd>0?''+Math.ceil(p.skillCd):'');
  setH('armyRow',!G.units.length);$('followBtn').classList.toggle('on',G.army.mode==='follow');$('deployBtn').classList.toggle('on',G.army.mode==='deploy');
- const mm=Math.round(Game.view.mm.s)+(Game.view.mm.big?1:0);if(mm!==hudMM){hudMM=mm;$('stage').style.setProperty('--mm',(Game.view.mm.big?0:Math.round(Game.view.mm.s))+'px')}
+ const mm=Math.round(Game.view.mm.s)+(Game.view.mm.big?1:0);if(mm!==hudMM){hudMM=mm;const M=Game.view.mm,st=$('stage').style,wide=innerWidth-M.s>300;
+  // 小地图放大时：横屏把提示放到地图右边；竖屏放到地图下面，不挡地图
+  st.setProperty('--mm',(!M.big||wide?Math.round(M.s):0)+'px');st.setProperty('--hudb',Math.round(M.big&&!wide?M.y+M.s+4:$('hud').getBoundingClientRect().bottom)+'px');placeToast()}
  const tt=tut.text(G);let h=tt;
  if(!h){if(day)h=s?'点右下角按钮建造 / 升级':'今晚敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来 · 准备好就入夜';
-  else if(G.phase==='night')h=p.dead?`${DOGS[p.dog].name}复活中… ${Math.ceil(p.respawn)}`:`敌人还剩 ${G.enemies.length+G.spawnQ.length} 个 · 靠近敌人会自动攻击`;else h=''}
- setT('hint',h);$('hint').classList.toggle('tut',!!tt);
+  else if(G.phase==='night')h=p.dead?`${DOGS[p.dog].name}复活中… ${Math.ceil(p.respawn)}`:`敌人还剩 ${G.enemies.length+G.spawnQ.length} 个 · 靠近会自动打`;else h=''}
+ if($('hint')._v!==h||$('hint').classList.contains('tut')!==!!tt){setT('hint',h);$('hint').classList.toggle('tut',!!tt);placeToast()}
  Game.view.guide=day&&(tut.step===1||tut.step===0)&&!G.night?(guideSpot(G,p)||{}).id||null:null}
 // ---- 主循环 ----
 let last=performance.now(),fpsN=0,fpsT=0;const showFps=/fps/.test(location.search);

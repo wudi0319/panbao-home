@@ -71,3 +71,21 @@ button{touch-action:manipulation;font-family:inherit}
 .act.sq.on{background:#ffd23f;box-shadow:0 4px 0 #e0a020;outline:3px solid #ff8c42}
 #hint,#toast{left:calc(50% + var(--mm,0px)/2 + 6px);max-width:calc(100vw - var(--mm,0px) - 34px)}
 @media (orientation:portrait){#toast{top:calc(env(safe-area-inset-top) + 124px)}}
+
+/* v0.4 提示条：放在 HUD 下面、小地图右边，居中，不再挤成窄条 */
+#hint,#toast{left:calc(var(--mm,0px) + 22px);right:10px;margin:0 auto;width:fit-content;max-width:none;transform:none;top:calc(var(--hudb,56px) + 6px)}
+#toast{top:var(--toastt,110px)}
+#hint.tut{animation:tutp2 1.4s ease-in-out infinite}@keyframes tutp2{50%{transform:scale(1.04)}}
+#hint{font-size:13px;line-height:1.35}#hint.tut{font-size:14px;padding:5px 12px}
+@media (orientation:portrait){#toast{top:var(--toastt,110px)}}
+@media (orientation:landscape) and (max-height:500px){
+ #hint,#toast{top:calc(var(--hudb,48px) + 4px)}#toast{top:var(--toastt,90px)}
+ #start .card{width:min(760px,100%);display:grid;grid-template-columns:1fr 1fr;column-gap:18px;align-content:start;padding:10px 16px}
+ #start .card>h1{grid-column:1/3;grid-row:1;font-size:22px}#start .card>.sub{grid-column:1/3;grid-row:2;margin:0 0 4px}
+ #start .card>:nth-child(3){grid-column:1;grid-row:3}#start .card>:nth-child(4){grid-column:1;grid-row:4}
+ #start .card>:nth-child(5){grid-column:1;grid-row:5}#start .card>:nth-child(6){grid-column:1;grid-row:6}
+ #start .card>:nth-child(7){grid-column:2;grid-row:3}#start .card>:nth-child(8){grid-column:2;grid-row:4/7;align-self:start}
+ #start .card>:nth-child(9){grid-column:2;grid-row:7;margin-top:6px}#start .card>:nth-child(10){grid-column:1;grid-row:7;align-self:center}
+ #start .card>:nth-child(11){grid-column:1/3;grid-row:8}
+ .pick canvas{width:50px;height:50px}.card>b{margin:4px 0 3px}
+}

@@ -14,7 +14,7 @@ function newGame(o){const tal=new Set(o.talents||[]);
   home:{hp:300*mods.stone,max:300*mods.stone,cd:0,hurtT:0},players:{},me:o.dog,b:{},enemies:[],units:[],shots:[],fx:[],floats:[],coins:[],
   input:{},army:{mode:'camp',leader:null,x:0,y:0},dark:0,shake:0,stats:{kills:0}};
  for(const s of SPOTS)G.b[s.id]={lv:0,hp:0,max:0,cd:0,dead:0};
- addPlayer(o.dog,o.dog,o.weapon);return G}
+ view.mm.big=false;view.guide=null;addPlayer(o.dog,o.dog,o.weapon);return G}
 function addPlayer(id,dog,weapon){const max=100*G.mods.hp;
  G.players[id]={id,dog,weapon,x:HOME.x,y:HOME.y+2.2,dir:0,hp:max,max,cd:0,skillCd:0,dead:0,respawn:0,ph:0,moving:false,swing:0,face:{x:0,y:1}};G.input[id]={x:0,y:0}}
 const spotOf=id=>SPOTS.find(s=>s.id===id);
@@ -35,7 +35,7 @@ function morning(){G.night++;G.phase='day';G.coins=[];
  let pay=4;for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)}
  pay=Math.round(pay*G.mods.gold);G.gold+=pay;
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}
- G.home.hp=G.home.max;for(const p of Object.values(G.players)){p.hp=p.max;p.dead=0}
+ G.home.hp=G.home.max;for(const p of Object.values(G.players)){p.hp=p.max;p.dead=0;p.swing=0;p.skillT=0;p.cd=0}
  for(const u of G.units){u.dead=0;u.hp=u.max}
  G.shots=[];sfx('morning');hooks.toast('☀️ 天亮啦！菜园和家里收入 +'+pay+' 💰')}
 function endGame(win){sfx(win?'win':'lose');const r=loadRec();const was=Object.assign({},r);r.best=Math.max(r.best,G.night);if(win)r.wins++;saveRec(r);hooks.end(win,was,r)}
@@ -60,7 +60,7 @@ function skill(pid){const p=G.players[pid];if(!p||p.dead||p.skillCd>0||G.phase!=
  else if(p.weapon==='frisbee'){for(let i=0;i<10;i++){const a=i/10*Math.PI*2;G.shots.push({x:p.x,y:p.y-.4,vx:Math.cos(a)*9,vy:Math.sin(a)*9,life:.8,dmg:26,kind:'frisbee',hit:new Set(),t:0,byP:1})}}
  else{for(const e of enemiesNear(p.x,p.y,3.3))hurtEnemy(e,70,1.6,1);G.shake=.25;G.fx.push({k:'quake',x:p.x,y:p.y,t:0,life:.6,r:3.3})}
  sfx('skill');hooks.toast(W.skill.name+'！');return true}
-function playerAttack(p,dt){const W=WEAPONS[p.weapon];p.cd-=dt;p.skillCd=Math.max(0,p.skillCd-dt);p.swing=Math.max(0,p.swing-dt);p.skillT=Math.max(0,(p.skillT||0)-dt);if(p.cd>0)return;
+function playerAttack(p,dt){const W=WEAPONS[p.weapon];p.cd-=dt;p.skillCd=Math.max(0,p.skillCd-dt);if(p.cd>0)return;
  const tg=nearestEnemy(p.x,p.y,W.range);if(!tg)return;p.cd=W.cd;p.swing=.3;p.face={x:tg.x-p.x,y:tg.y-p.y};
  if(W.kind==='melee'){enemiesNear(p.x,p.y,W.range).sort((a,b)=>dist(a,p)-dist(b,p)).slice(0,W.maxHit).forEach(e=>{hurtEnemy(e,W.dmg,0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:W.range,w:p.weapon})}
  else if(W.kind==='ranged')shoot(p,tg,W.dmg,'frisbee',11,1);
@@ -104,10 +104,15 @@ function stepUnit(u,dt){const U=UNITS[u.k],s=spotOf(u.home),b=G.b[s.id];u.flash=
  if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=U.range){u.moving=false;if(u.cd<=0){u.cd=U.cd;u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9);else hurtEnemy(tg,dmg)}u.dir=tg.x<u.x?2:3;return}goal=tg}
  const dx=goal.x-u.x,dy=goal.y-u.y,d=Math.hypot(dx,dy);if(d<.15){u.moving=false;return}
  const sp=Math.min(d,U.spd*dt*(d>3?1.4:1));u.x+=dx/d*sp;u.y+=dy/d*sp;u.moving=true;u.ph+=dt*12;if(Math.abs(dx)>.05)u.dir=dx<0?2:3}
-function stepPlayer(p,dt){const inp=G.input[p.id]||{x:0,y:0};p.flash=Math.max(0,(p.flash||0)-dt);
+// 被圆形建筑（塔/营地/菜园）挡住时，顺着边绕过去，不会卡住
+function slideAround(p,inp,sp){let best=null,bd=1.4;for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead||s.t==='wall')continue;const d=Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}
+ if(!best)return;const rx=(p.x-best.x)/bd,ry=(p.y-best.y)/bd;let tx=-ry,ty=rx;if(tx*inp.x+ty*inp.y<0){tx=-tx;ty=-ty}
+ const nx=clamp(p.x+tx*sp,.5,MAP_W-.5),ny=clamp(p.y+ty*sp,.5,MAP_H-.5);if(!solidAt(nx,ny,.3)){p.x=nx;p.y=ny}}
+function stepPlayer(p,dt){const inp=G.input[p.id]||{x:0,y:0};p.flash=Math.max(0,(p.flash||0)-dt);p.swing=Math.max(0,p.swing-dt);p.skillT=Math.max(0,(p.skillT||0)-dt);
  if(p.dead){p.respawn-=dt;if(p.respawn<=0){p.dead=0;p.hp=p.max;p.x=HOME.x;p.y=HOME.y+2}return}
- const m=Math.hypot(inp.x,inp.y);p.moving=m>.1;
+ const m=Math.hypot(inp.x,inp.y),ox=p.x,oy=p.y;p.moving=m>.1;
  if(p.moving){const sp=4.2*dt*Math.min(1,m),inside=solidAt(p.x,p.y,.3);const nx=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);if(inside||!solidAt(nx,p.y,.3))p.x=nx;const ny=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);if(inside||!solidAt(p.x,ny,.3))p.y=ny;p.ph+=dt*11;
+  if(!inside&&Math.hypot(p.x-ox,p.y-oy)<sp*.35)slideAround(p,inp,sp);
   p.dir=Math.abs(inp.x)>Math.abs(inp.y)?(inp.x<0?2:3):(inp.y<0?1:0);p.face={x:inp.x,y:inp.y};
   if(Math.hypot(p.x-HOME.x,p.y-HOME.y)<HOME.r){const a=Math.atan2(p.y-HOME.y,p.x-HOME.x);p.x=HOME.x+Math.cos(a)*HOME.r;p.y=HOME.y+Math.sin(a)*HOME.r}}
  if(G.phase==='night')playerAttack(p,dt);else{p.skillCd=0}}
@@ -187,16 +192,17 @@ function heldW(c,w,sc){c.save();c.scale(sc,sc);
  c.restore()}
 function hPaw(c,kind,x,y){c.beginPath();c.ellipse(x,y,.065,.055,0,0,7);c.fillStyle=PAWC[kind]||'#fff';c.fill();hLine(c,.04);
  c.beginPath();c.moveTo(x-.02,y+.02);c.lineTo(x-.02,y+.045);c.moveTo(x+.02,y+.02);c.lineTo(x+.02,y+.045);c.lineWidth=.018;c.stroke()}
-function visDir(p){if(p.dir>=2)p.side=p.dir;if(p.swing>0&&p.face){const f=p.face;if(Math.abs(f.x)>.05)p.side=f.x<0?2:3;return p.side||3}return p.dir}
+function visDir(p){if(p.dir>=2)p.side=p.dir;const sk=(p.skillT||0)>0?1-p.skillT/.5:-1;if(sk>=0&&p.weapon==='spatula')return Math.floor(sk*10)%2?2:3;if(sk>=0&&p.weapon==='bone')return p.side||3;if(p.swing>0&&p.face){const f=p.face;if(Math.abs(f.x)>.05)p.side=f.x<0?2:3;return p.side||3}return p.dir}
 function drawPlayer(p){const size=1.3,dir=visDir(p),kind=p.dog,w=p.weapon,sc=1.12,
   sk=(p.skillT||0)>0?1-p.skillT/.5:-1,k=p.swing>0?1-p.swing/.3:-1,bob=p.moving?Math.sin(p.ph)*.015:0,
   frHide=w==='frisbee'&&p.cd>WEAPONS.frisbee.cd-.35&&G.phase==='night';
  ctx.save();if(p.flash)ctx.globalAlpha=.6;ctx.translate(sx(p.x)-size*T/2,sy(p.y)-size*T*.95);ctx.scale(size*T,size*T);const c=ctx;
  const pose=()=>{
-  if(sk>=0&&w==='spatula'){// 旋风锅铲：抱着锅铲转圈
-   const a=sk*Math.PI*4;c.save();c.translate(.5,.68);c.rotate(a);c.translate(0,.12);heldW(c,w,sc);c.restore();hPaw(c,kind,.5+Math.sin(a)*.12,.68-Math.cos(a)*.12+.02);return}
-  if(sk>=0&&w==='frisbee'){hPaw(c,kind,.38,.56-sk*.06);hPaw(c,kind,.62,.56-sk*.06);return}
-  if(sk>=0&&w==='bone'){const r=sk<.4?-.2:Math.PI;c.save();c.translate(.5,sk<.4?.6:.78);c.rotate(r);heldW(c,w,sc*1.1);c.restore();hPaw(c,kind,.44,sk<.4?.6:.78);hPaw(c,kind,.56,sk<.4?.6:.78);return}
+  if(sk>=0&&w==='spatula'){// 旋风锅铲：左右快速转身，锅铲平举
+   const f=dir===2?-1:1;c.save();c.translate(.5,0);c.scale(f,1);c.translate(-.5,0);c.save();c.translate(.74,.66);c.rotate(1.57);heldW(c,w,sc);c.restore();hPaw(c,kind,.72,.66);hPaw(c,kind,.79,.7);c.restore();return}
+  if(sk>=0&&w==='frisbee'){const u=Math.sin(sk*Math.PI)*.06;hPaw(c,kind,.24,.52-u);hPaw(c,kind,.76,.52-u);return}
+  if(sk>=0&&w==='bone'){// 震地一击：先举高，再狠狠砸到前面地上
+   const f=dir===2?-1:1,q=sk<.45?sk/.45:1,e=Math.sin(q*Math.PI),gx=.7+.06*q,gy=sk<.45?.66-.14*q:.76;c.save();c.translate(.5,0);c.scale(f,1);c.translate(-.5,0);c.save();c.translate(gx,gy);c.rotate(sk<.45?-.6*q:1.95);heldW(c,w,sc*1.15);c.restore();hPaw(c,kind,gx-.03,gy);hPaw(c,kind,gx+.04,gy+.04);c.restore();return}
   if(dir===1){return}
   if(dir===0){// 正面
    if(k>=0){const e=Math.sin(k*Math.PI),lift=.12*e;
@@ -208,9 +214,9 @@ function drawPlayer(p){const size=1.3,dir=visDir(p),kind=p.dog,w=p.weapon,sc=1.1
   // 侧面（右向画，左向镜像）
   const f=dir===2?-1:1;c.save();c.translate(.5,0);c.scale(f,1);c.translate(-.5,0);
   if(k>=0){const e=Math.sin(k*Math.PI);
-   if(w==='frisbee'){const push=Math.min(1,k*2.5);hPaw(c,kind,.7+.14*push,.68-.04*e);hPaw(c,kind,.74+.16*push,.74-.04*e);
+   if(w==='frisbee'){const push=Math.min(1,k*2.5)*(1-Math.max(0,k-.6)*1.5);hPaw(c,kind,.68+.12*push,.74-.02*e);hPaw(c,kind,.72+.13*push,.8-.02*e);
     if(k>.75){c.globalAlpha*=(k-.75)*4;c.save();c.translate(.74,.9);heldW(c,w,sc*.9);c.restore()}}
-   else{const gx=.72+.06*e,gy=.68-.12*e;c.save();c.translate(gx,gy);c.rotate(-1.1+k*2.9);heldW(c,w,sc);c.restore();hPaw(c,kind,gx-.03,gy);hPaw(c,kind,gx+.04,gy+.04)}}
+   else{const gx=.75+.05*e,gy=.7-.1*e;c.save();c.translate(gx,gy);c.rotate(-.35+k*2.2);heldW(c,w,sc);c.restore();hPaw(c,kind,gx-.03,gy);hPaw(c,kind,gx+.04,gy+.04)}}
   else{if(w==='frisbee'){if(!frHide){c.save();c.translate(.72,.9+bob);c.rotate(.15);heldW(c,w,sc*.9);c.restore()}hPaw(c,kind,.7,.68+bob)}
    else{c.save();c.translate(.74,.84+bob);c.rotate(.38);heldW(c,w,sc);c.restore();hPaw(c,kind,.71,.7+bob);hPaw(c,kind,.77,.76+bob)}}
   c.restore()};
@@ -250,8 +256,8 @@ function drawFlag(x,y){const X=sx(x),Y=sy(y),t=performance.now()/1000;ctx.save()
  ctx.fillStyle='#6b4a32';ctx.fillRect(X-1.5,Y-T*1.3,3,T*1.3);ctx.fillStyle='#ff5a5a';ctx.strokeStyle='#3b2a20';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(X+1.5,Y-T*1.3);
  ctx.quadraticCurveTo(X+T*.35,Y-T*(1.25+.05*Math.sin(t*6)),X+T*.7,Y-T*1.12);ctx.lineTo(X+1.5,Y-T*.85);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
 // 屏幕外的敌人：屏幕边缘画红箭头（按方向合并，显示数量）
-function drawOffscreen(W,H){const top=view.top+8,bot=H-8,lft=8,rgt=W-8,cx=W/2,cy=(top+bot)/2,B={};
- for(const e of G.enemies){const X=sx(e.x),Y=sy(e.y);if(X>0&&X<W&&Y>view.top&&Y<H)continue;const a=Math.atan2(Y-cy,X-cx),k=Math.round(a/(Math.PI/10));const d=Math.hypot(X-cx,Y-cy);
+function drawOffscreen(W,H){const top=Math.max(view.top,view.hintB||0)+10,bot=H-8,lft=8,rgt=W-8,cx=W/2,cy=(top+bot)/2,B={};
+ for(const e of G.enemies){const X=sx(e.x),Y=sy(e.y);if(X>0&&X<W&&Y>top-10&&Y<H)continue;const a=Math.atan2(Y-cy,X-cx),k=Math.round(a/(Math.PI/10));const d=Math.hypot(X-cx,Y-cy);
   if(!B[k])B[k]={a,n:0,d};B[k].n++;if(d<B[k].d){B[k].d=d;B[k].a=a}}
  const pulse=.75+.25*Math.sin(performance.now()/160);
  for(const k in B){const{a,n}=B[k],ca=Math.cos(a),sa=Math.sin(a);let t=1e9;if(ca>0)t=Math.min(t,(rgt-cx)/ca);if(ca<0)t=Math.min(t,(lft-cx)/ca);if(sa>0)t=Math.min(t,(bot-cy)/sa);if(sa<0)t=Math.min(t,(top-cy)/sa);
@@ -259,7 +265,7 @@ function drawOffscreen(W,H){const top=view.top+8,bot=H-8,lft=8,rgt=W-8,cx=W/2,cy
   ctx.beginPath();ctx.moveTo(14,0);ctx.lineTo(-8,-11);ctx.lineTo(-3,0);ctx.lineTo(-8,11);ctx.closePath();ctx.fill();ctx.stroke();ctx.rotate(-a);
   if(n>1){ctx.font='900 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='#7a1d1d';ctx.strokeText(n,-ca*16,-sa*16);ctx.fillStyle='#fff';ctx.fillText(n,-ca*16,-sa*16)}ctx.restore()}}
 // 小地图：左上角，点一下放大
-function drawMinimap(W,H){const m=view.mm,base=Math.max(84,Math.min(118,Math.min(W,H)*.26));m.s=m.big?Math.min(base*2.2,Math.min(W,H-view.top)-20):base;m.x=8;m.y=view.top+8;
+function drawMinimap(W,H){const m=view.mm,base=Math.max(84,Math.min(118,Math.min(W,H)*.26));m.s=m.big?Math.max(base,Math.min(base*2.2,Math.min(W,H-view.top)-20,(view.joyTop||H)-view.top-18)):base;m.x=8;m.y=view.top+8;
  const S2=m.s,k=S2/MAP_W,X0=m.x,Y0=m.y,P=(x,y)=>[X0+x*k,Y0+y*k],t=performance.now()/1000;ctx.save();
  ctx.globalAlpha=.92;ctx.fillStyle='#7cc96b';ctx.strokeStyle='#6b4a32';ctx.lineWidth=2.5;ctx.beginPath();ctx.roundRect(X0-3,Y0-3,S2+6,S2+6,8);ctx.fill();ctx.stroke();ctx.globalAlpha=1;
  ctx.fillStyle='#ecd29a';ctx.fillRect(X0+16*k,Y0,2*k,S2);ctx.fillRect(X0,Y0+16*k,S2,2*k);
