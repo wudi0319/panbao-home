@@ -1,6 +1,6 @@
 // 保卫胖宝 — 界面：开始选择、HUD、按钮、摇杆和键盘
 const $=id=>document.getElementById(id);
-const sel={dog:'yellow',weapon:'spatula',buffs:[],debuffs:[],map:'yard'};
+const sel={dog:'yellow',weapon:'spatula',buffs:[],debuffs:[],map:'yard',cat:'hero'};
 const allOn=()=>$('unlockAll').checked;
 const unlocked=(u,r)=>allOn()||!u||(u==='win'?r.wins>0:u==='n3'?r.best>=3:true);
 const unlockText=u=>u==='win'?'通关后解锁':'守过第 3 夜解锁';
@@ -20,18 +20,27 @@ function renderPrep(){const r=Game.loadRec(),all=allOn(),sm=MAPS[sel.map];
  $('prepTitle').textContent='准备出发';
  $('prepMap').textContent=sm?(sm.ic+' '+sm.name+' · '+sm.desc):'';
  $('prepStars').textContent='⭐ 累计 '+starTotal(r)+' 星 · 还可花 '+starSpendable(r);
+ sel.cat=sel.cat||'hero';
+ $('prepTabs').innerHTML=Object.entries(CATS).map(([k,c])=>{
+  const nb=sel.buffs.filter(id=>(BUFFS[id]&&BUFFS[id].cat)===k).length,nd=sel.debuffs.filter(id=>(DEBUFFS[id]&&DEBUFFS[id].cat)===k).length,mark=(nb||nd)?' · '+(nb?nb+'加':'')+(nb&&nd?'/':'')+(nd?nd+'挑':''):'';
+  return`<button data-cat="${k}" class="${sel.cat===k?'on':''}">${c.ic} ${c.name}${mark}</button>`}).join('');
  sel.buffs=sel.buffs.filter(k=>buffOwned(r,k,all));
  sel.debuffs=sel.debuffs.filter(k=>debuffUnlocked(r,k,all));
- $('pickBuff').innerHTML=Object.entries(BUFFS).map(([k,b])=>{
+ const buffs=Object.entries(BUFFS).filter(([,b])=>(b.cat||'build')===sel.cat);
+ const debs=Object.entries(DEBUFFS).filter(([,d])=>(d.cat||'enemy')===sel.cat);
+ $('pickBuff').innerHTML=buffs.length?buffs.map(([k,b])=>{
   const un=buffUnlocked(r,k,all),own=buffOwned(r,k,all),on=sel.buffs.includes(k),c=b.cost||0;
   if(!un)return`<button data-b="${k}" class="lock">${b.ic} ${b.name}<small>🔒 ${condText(b.unlock)}</small></button>`;
   if(!own)return`<button data-b="${k}" class="buy">${b.ic} ${b.name}<small>兑换 ${c} 星 · ${b.desc}</small></button>`;
-  return`<button data-b="${k}" class="${on?'on':''}">${b.ic} ${b.name}<small>${b.desc}</small></button>`}).join('');
- $('pickDebuff').innerHTML=Object.entries(DEBUFFS).map(([k,d])=>{
+  return`<button data-b="${k}" class="${on?'on':''}">${b.ic} ${b.name}<small>${b.desc}</small></button>`}).join(''):'<p class="cat-empty">这一类没有出发前加成，看看旁边的挑战吧</p>';
+ $('pickDebuff').innerHTML=debs.length?debs.map(([k,d])=>{
   const un=debuffUnlocked(r,k,all),on=sel.debuffs.includes(k);
   if(!un)return`<button data-d="${k}" class="lock">${d.ic} ${d.name}<small>🔒 ${condText(d.unlock)}</small></button>`;
-  return`<button data-d="${k}" class="${on?'on':''}">${d.ic} ${d.name}<small>+${d.star} 星 · ${d.desc}</small></button>`}).join('');
+  return`<button data-d="${k}" class="${on?'on':''}">${d.ic} ${d.name}<small>+${d.star} 星 · ${d.desc}</small></button>`}).join(''):'<p class="cat-empty">这一类没有挑战</p>';
  const rg=starRange(sel.debuffs);
+ const cat=CATS[sel.cat]?CATS[sel.cat].name:'';
+ document.querySelector('.prep-k-buff').textContent=buffs.length?('带上'+cat+'加成（最多 '+BUFF_MAX+' 个，用星星兑换）'):(cat+'没有出发前加成');
+ document.querySelector('.prep-k-deb').textContent=cat+'挑战（增加难度，通关星星更多）';
  $('prepForecast').textContent='本关通关可得 '+rg.min+'–'+rg.max+' 星'+(sel.debuffs.length?'（挑战 +'+debuffStars(sel.debuffs)+'）':'')+' · 已选加成 '+sel.buffs.length+'/'+BUFF_MAX;
  markScroll($('pickBuff'));markScroll($('pickDebuff'))}
 function openPrep(){renderPrep();$('start').classList.add('hidden');$('prep').classList.remove('hidden')}
@@ -44,6 +53,7 @@ $('unlockAll').onchange=()=>{renderStart();if(!$('prep').classList.contains('hid
 $('goBtn').onclick=()=>{SFX.play('click');openPrep()};
 $('prepBack').onclick=()=>{SFX.play('click');closePrep()};
 $('prepGo').onclick=()=>startRun();
+$('prepTabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel.cat=b.dataset.cat;SFX.play('click');renderPrep()};
 $('pickBuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.b,r=Game.loadRec(),all=allOn();
  if(b.classList.contains('lock'))return toast(condText(BUFFS[k].unlock)||'还没解锁哦');
  if(b.classList.contains('buy')){if(starSpendable(r)<(BUFFS[k].cost||0))return toast('星星不够，再去通关攒一点吧');Game.saveRec(buyBuff(r,k));toast('兑换了 '+BUFFS[k].ic+' '+BUFFS[k].name+'！');if(sel.buffs.length<BUFF_MAX&&!sel.buffs.includes(k))sel.buffs.push(k);renderPrep();return}
@@ -73,7 +83,7 @@ let homePick=null;
 function openHomeUp(){const G=Game.G,c=Game.homeUpCost();if(c==null)return;
  homePick=Game.homeUpChoices();$('homeUpTitle').textContent='🏠 升级老家（第 '+(G.home.up+1)+' 次）';
  $('homeUpSub').textContent='花 '+c+' 金币选一个加成。每局最多 3 次，这是第 '+(G.home.up+1)+' 次';
- $('homeUpChoices').innerHTML=homePick.map(id=>{const u=HOME_UPS[id];return`<button data-h="${id}">${u.ic} ${u.name}<small>${u.desc}</small></button>`}).join('');
+ $('homeUpChoices').innerHTML=homePick.map(id=>{const u=HOME_UPS[id],c=CATS[u.cat]||CATS.build;return`<button data-h="${id}"><em class="cat-tag">${c.ic} ${c.name}</em>${u.ic} ${u.name}<small>${u.desc}</small></button>`}).join('');
  $('homeUp').classList.remove('hidden');SFX.play('click')}
 function closeHomeUp(){$('homeUp').classList.add('hidden');homePick=null}
 $('homeUpChoices').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=me();if(p&&Game.upgradeHome(p.id,b.dataset.h))closeHomeUp()};
@@ -82,6 +92,7 @@ $('homeUpCancel').onclick=()=>{SFX.play('click');closeHomeUp()};
 const me=()=>Game.G&&Game.G.players[Game.G.me];
 const tap=(id,fn)=>$(id).addEventListener('click',e=>{e.preventDefault();fn()});
 tap('buildBtn',()=>{const p=me();if(p&&Game.build(p.id))tut.on('build')});
+tap('razedBtn',()=>{const p=me();if(p)Game.demolish(p.id)});
 tap('homeBtn',()=>{const p=me();if(p)openHomeUp()});
 tap('nightBtn',()=>{Game.startNight();tut.on('night')});
 tap('skillBtn',()=>{const p=me();if(p&&p.skillCd<=0&&Game.skill(p.id))tut.on('skill')});
@@ -137,7 +148,8 @@ function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day',
  if(s){const b=G.b[s.id],c=Game.nextCost(s),hint=c==null?'':upgradeHint(s,b.lv+1);setH('buildBtn',false);
   const txt=c==null?`${BUILD[s.t].ic} ${bName(s)} 已满级`:`${BUILD[s.t].ic} ${b.lv?'升级':'建造'}${bName(s)}${b.lv?' → '+(b.lv+1)+'级':''}`;
   const html=c==null?txt:`${txt}<small>${hint} 💰${c}</small>`;
-  const el=$('buildBtn');if(el._v!==html){el._v=html;el.innerHTML=html}el.classList.toggle('poor',c==null||G.gold<c)}else setH('buildBtn',true);
+  const el=$('buildBtn');if(el._v!==html){el._v=html;el.innerHTML=html}el.classList.toggle('poor',c==null||G.gold<c);
+  if(b.lv&&(G.mods.refund||0)>0){const back=Game.demolishValue(s);setH('razedBtn',false);setT('razedBtn',`♻️ 拆除退 ${back}💰`)}else setH('razedBtn',true)}else{setH('buildBtn',true);setH('razedBtn',true)}
  const hc=play&&day&&!p.dead&&Game.nearHome(p)?Game.homeUpCost():null;
  if(hc!=null){setH('homeBtn',false);setT('homeBtn',`🏠 升级老家（${G.home.up+1}/3）💰${hc}`);$('homeBtn').classList.toggle('poor',G.gold<hc)}else setH('homeBtn',true);
  setH('nightBtn',!day||!play);

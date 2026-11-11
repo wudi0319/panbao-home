@@ -23,7 +23,8 @@ function addPlayer(id,dog,weapon){const max=100*G.mods.hp;let x=HOME.x,y=HOME.y+
 const spotOf=id=>SPOTS.find(s=>s.id===id);
 const bStat=(s,k,lv)=>BUILD[s.t][k][lv-1];
 function bMax(s,lv){let h=bStat(s,'hp',lv);if(s.t==='wall')h*=G.mods.stone;return h}
-function nextCost(s){const b=G.b[s.id];if(b.lv>=3)return null;let c=BUILD[s.t].cost[b.lv];if(s.t==='wall'&&G.mods.wcut)c=Math.max(2,c-G.mods.wcut);return c}
+function priceOf(c){return Math.max(1,Math.round(c*(G.mods&&G.mods.bcost||1)))}
+function nextCost(s){const b=G.b[s.id];if(b.lv>=3)return null;let c=BUILD[s.t].cost[b.lv];if(s.t==='wall'&&G.mods.wcut)c=Math.max(2,c-G.mods.wcut);return priceOf(c)}
 function nearSpot(p){let best=null,bd=1.7;for(const s of SPOTS){const d=s.t==='wall'?Math.max(0,bDist(s,p.x,p.y)+WALL_HT+.15):Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}return best}
 function build(pid,sid){if(G.phase!=='day')return false;const p=G.players[pid],s=spotOf(sid)||nearSpot(p);if(!s)return false;
  const b=G.b[s.id],c=nextCost(s);if(c==null){hooks.toast(bName(s)+'已经满级啦');return false}
@@ -31,11 +32,18 @@ function build(pid,sid){if(G.phase!=='day')return false;const p=G.players[pid],s
  G.gold-=c;b.lv++;b.max=bMax(s,b.lv);b.hp=b.max;b.dead=0;
  G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');hooks.toast((b.lv===1?'建好了 ':'升级到 '+b.lv+' 级 ')+bName(s)+'！'+(upgradeHint(s,b.lv)?' '+upgradeHint(s,b.lv):''));
  navDirty=1;for(const q of Object.values(G.players))if(!q.dead)pushOut(q,.3);for(const u of G.units)if(!u.dead)pushOut(u,.28);syncUnits();return true}
+function paidFor(s){const b=G.b[s.id];if(!b||!b.lv)return 0;let n=0;for(let i=0;i<b.lv;i++){let c=BUILD[s.t].cost[i];if(s.t==='wall'&&G.mods.wcut)c=Math.max(2,c-G.mods.wcut);n+=c}return n}
+function demolishValue(s){return Math.max(1,Math.floor(paidFor(s)*(G.mods.refund||0)))}
+function demolish(pid,sid){if(G.phase!=='day')return false;const p=G.players[pid],s=spotOf(sid)||nearSpot(p);if(!p||!s||p.dead)return false;const b=G.b[s.id];if(!b||!b.lv)return false;if(!(G.mods.refund>0)){hooks.toast('还不会拆了回收呢');return false}
+ const back=demolishValue(s);b.lv=0;b.hp=0;b.max=0;b.dead=0;G.gold+=back;
+ if(s.t==='cats'||s.t==='ducks')G.units=G.units.filter(u=>u.home!==s.id);navDirty=1;G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');hooks.toast('拆除了 '+bName(s)+'，退回 '+back+' 💰');return true}
 function nearHome(p){return Math.hypot(p.x-HOME.x,p.y-HOME.y)<HOME.r+1.9}
-function homeUpCost(){return G.home.up>=3?null:HOME_UP_COST[G.home.up]}
-function homeUpChoices(){const taken=new Set(G.home.picks||[]),pool=Object.keys(HOME_UPS).filter(k=>!taken.has(k));
- for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
- return pool.slice(0,3)}
+function homeUpCost(){return G.home.up>=3?null:priceOf(HOME_UP_COST[G.home.up])}
+function homeUpChoices(){const taken=new Set(G.home.picks||[]),by={hero:[],unit:[],build:[],econ:[]};
+ for(const k of Object.keys(HOME_UPS))if(!taken.has(k))(by[HOME_UPS[k].cat||'build']||by.build).push(k);
+ const take=a=>{if(!a.length)return null;const i=Math.floor(Math.random()*a.length);return a.splice(i,1)[0]};
+ const cats=['hero','unit','build','econ'],out=cats.map(c=>take(by[c])).filter(Boolean),rest=cats.flatMap(c=>by[c]);
+ while(out.length<3&&rest.length)out.push(take(rest));return out}
 function applyHomeUp(id){const U=HOME_UPS[id];if(!U||!G)return false;
  if(id==='thick'){G.home.max+=80;G.home.hp=G.home.max}
  else if(id==='bottle'){G.home.bdmg=(G.home.bdmg||6)+5;G.home.bcd=Math.max(.55,(G.home.bcd||1.1)-.25);G.home.brange=(G.home.brange||4)+1.2}
@@ -45,6 +53,13 @@ function applyHomeUp(id){const U=HOME_UPS[id];if(!U||!G)return false;
  else if(id==='beds'){G.home.beds=(G.home.beds||0)+1;syncUnits()}
  else if(id==='cozy')G.home.cozy=Math.min(.4,(G.home.cozy||0)+.22);
  else if(id==='recall')G.home.rev=Math.min(.45,(G.home.rev||0)+.25);
+ else if(id==='vigor'){for(const p of Object.values(G.players)){p.max+=40;p.hp=Math.min(p.max,p.hp+40)}}
+ else if(id==='sharp')G.mods.pdmg=(G.mods.pdmg||1)*1.15;
+ else if(id==='haste'){G.mods.pspd=(G.mods.pspd||1)*1.15;G.mods.scd=(G.mods.scd||1)*0.9}
+ else if(id==='drill')G.mods.udmg=(G.mods.udmg||1)*1.2;
+ else if(id==='scope'){G.mods.trange=(G.mods.trange||1)*1.15;G.mods.tdmg=(G.mods.tdmg||1)*1.1}
+ else if(id==='banker'){G.mods.interest=(G.mods.interest||0)+.10;G.mods.interestCap=(G.mods.interestCap||0)+6}
+ else if(id==='bargain')G.mods.bcost=(G.mods.bcost||1)*0.85
  G.home.picks.push(id);G.home.up++;G.fx.push({k:'puff',x:HOME.x,y:HOME.y,t:0,life:.6});sfx('build');hooks.toast('🏠 '+U.ic+' '+U.name+'！');return true}
 function upgradeHome(pid,id){if(G.phase!=='day')return false;const p=G.players[pid];if(!p||p.dead||!nearHome(p))return false;
  const c=homeUpCost();if(c==null){hooks.toast('老家这局已经升满啦');return false}
@@ -56,11 +71,11 @@ function startNight(){if(G.phase!=='day')return;G.phase='night';G.nightT=0;G.spa
 function morning(){G.night++;G.phase='day';G.coins=[];
  if(G.night>=NIGHTS){G.phase='win';endGame(true);return}
  let pay=4+(G.home.stipend||0);for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)+(G.mods.farmPlus||0)}
- pay=Math.round(pay*G.mods.gold);G.gold+=pay;
+ pay=Math.round(pay*G.mods.gold);const interest=G.mods.interest?Math.min(G.mods.interestCap||8,Math.floor(G.gold*G.mods.interest)):0;G.gold+=pay+interest;
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}navDirty=1;
  G.home.hp=G.home.max;for(const p of Object.values(G.players)){p.hp=p.max;p.dead=0;p.swing=0;p.skillT=0;p.cd=0}
  for(const u of G.units){u.dead=0;u.hp=u.max}
- G.shots=[];sfx('morning');hooks.toast('☀️ 天亮啦！菜园和家里收入 +'+pay+' 💰')}
+ G.shots=[];sfx('morning');hooks.toast('☀️ 天亮啦！菜园和家里收入 +'+pay+' 💰'+(interest?'，存款利息 +'+interest+' 💰':''))}
 function endGame(win){sfx(win?'win':'lose');const r=normRec(loadRec());const was={best:r.best,wins:r.wins,starSpent:r.starSpent,buffs:[...(r.buffs||[])],maps:{}};
  for(const k in r.maps)was.maps[k]={wins:r.maps[k].wins||0,best:r.maps[k].best||0,stars:r.maps[k].stars||0};
  r.best=Math.max(r.best,G.night);if(win)r.wins++;const mid=G.map||MAP.id;r.maps[mid]=r.maps[mid]||{wins:0,best:0,stars:0};r.maps[mid].best=Math.max(r.maps[mid].best||0,G.night);
@@ -91,10 +106,10 @@ function faceAng(p){if(p.face&&(Math.abs(p.face.x)+Math.abs(p.face.y))>1e-6)retu
 function inFan(p,e,range){const dx=e.x-p.x,dy=e.y-p.y,d=Math.hypot(dx,dy),er=(ENEMIES[e.k]&&ENEMIES[e.k].r)||.35;if(d>range+er)return false;if(d<.12)return true;
  let da=Math.atan2(dy,dx)-faceAng(p);while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;return Math.abs(da)<=Math.PI/2+1e-4}
 function playerAttack(p,dt){const W=WEAPONS[p.weapon];p.cd-=dt;p.skillCd=Math.max(0,p.skillCd-dt);if(p.cd>0)return;
- const tg=nearestEnemy(p.x,p.y,W.range);if(!tg)return;p.cd=W.cd;p.swing=.3;p.combat=G.t;p.face={x:tg.x-p.x,y:tg.y-p.y};
- if(W.kind==='melee'){const ang=Math.atan2(tg.y-p.y,tg.x-p.x);enemiesNear(p.x,p.y,W.range).forEach(e=>{if(!inFan(p,e,W.range))return;hurtEnemy(e,W.dmg*(G.mods.pdmg||1),0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'fan',x:p.x,y:p.y,a:ang,t:0,life:.3,r:W.range,w:p.weapon})}
+ const range=W.range*(G.mods.prange||1),tg=nearestEnemy(p.x,p.y,range);if(!tg)return;p.cd=W.cd;p.swing=.3;p.combat=G.t;p.face={x:tg.x-p.x,y:tg.y-p.y};
+ if(W.kind==='melee'){const ang=Math.atan2(tg.y-p.y,tg.x-p.x);enemiesNear(p.x,p.y,range).forEach(e=>{if(!inFan(p,e,range))return;hurtEnemy(e,W.dmg*(G.mods.pdmg||1),0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'fan',x:p.x,y:p.y,a:ang,t:0,life:.3,r:range,w:p.weapon})}
  else if(W.kind==='ranged')shoot(p,tg,W.dmg*(G.mods.pdmg||1),'frisbee',11,1);
- else{enemiesNear(p.x,p.y,W.range).forEach(e=>hurtEnemy(e,W.dmg*(G.mods.pdmg||1),.3,1));G.shake=Math.max(G.shake,.12);G.fx.push({k:'slam',x:p.x,y:p.y,t:0,life:.35,r:W.range});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:Math.min(W.range,1.8),w:p.weapon})}}
+ else{enemiesNear(p.x,p.y,range).forEach(e=>hurtEnemy(e,W.dmg*(G.mods.pdmg||1),.3,1));G.shake=Math.max(G.shake,.12);G.fx.push({k:'slam',x:p.x,y:p.y,t:0,life:.35,r:range});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:Math.min(range,1.8),w:p.weapon})}}
 // 墙段碰撞：敌人整段（含门）都过不去；自己人可以从门洞穿过
 function segHit(g,x,y,r){const hl=g.len/2,ht=WALL_HT,dx=Math.abs(x-g.x),dy=Math.abs(y-g.y);return g.v?(dx<ht+r&&dy<hl+r):(dy<ht+r&&dx<hl+r)}
 function segFriendHit(g,x,y,r){if(g.gate){const along=g.v?Math.abs(y-g.y):Math.abs(x-g.x);if(along<g.gate)return false}return segHit(g,x,y,r)}
@@ -147,7 +162,7 @@ function dealTo(tg,d,src){if(!liveTg(tg))return;const x=(src&&src.x)||0,y=(src&&
  else if(tg.kind==='b'){const b=G.b[tg.s.id];if(!b||b.dead)return;if(tg.s.t==='wall'){const lv=b.lv||1,ar=(BUILD.wall.armor||[])[lv-1]||0;d*=1-ar}b.hp-=d;b.flash=.2;flashHit(tg,x,y,0);
   if(b.hp<=0){b.hp=0;b.dead=1;navDirty=1;G.stats.broke=(G.stats.broke||0)+1;hooks.toast(bName(tg.s)+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
  else{const o=tg.o;o.hp-=d;o.flash=.18;if(tg.kind==='p'){sfx('hurt');o.combat=G.t}if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?6:unitRespawn(o.home);if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 6 秒后回家复活')}}}
-function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'||tg.kind==='b')d*=(G.mods.esmash||1);
+function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'||tg.kind==='b')d*=(G.mods.esmash||1);if(tg.kind==='p')d*=(G.mods.phurt||1);
  if(tg.kind==='b'&&tg.s&&tg.s.t==='wall'){const lv=(G.b[tg.s.id]||{}).lv||1,ar=(BUILD.wall.armor||[])[lv-1]||0;d*=1-ar}
  const hx=tg.kind==='b'?tg.s.x:tg.kind==='home'?HOME.x:(tg.o&&tg.o.x)||e.x,hy=tg.kind==='b'?tg.s.y:tg.kind==='home'?HOME.y:(tg.o&&tg.o.y)||e.y;
  flashHit(tg,(hx+e.x)/2,(hy+e.y)/2,ENEMIES[e.k]&&ENEMIES[e.k].smash);
@@ -195,10 +210,10 @@ function stepUnit(u,dt){const U=UNITS[u.k],s=spotOf(u.home),b=G.b[s.id];u.flash=
  if(u.dead){if(G.phase==='night'&&!b.dead){u.respawn-=dt;if(u.respawn<=0){u.dead=0;u.hp=u.max;u.x=s.x;u.y=s.y+.6}}return}
  u.cd-=dt;const an=unitAnchor(u);let goal=an,tg=null;
  if(G.phase==='night'){tg=nearestEnemy(u.x,u.y,3.4);if(tg&&dist(tg,an)>5.5)tg=null}
- const dmg=U.dmg*G.mods.pet*(1+.3*(b.lv-1))*(G.home.aura>1&&Math.hypot(u.x-HOME.x,u.y-HOME.y)<4.6?G.home.aura:1);
- if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=U.range){u.moving=false;if(u.cd<=0){u.cd=U.cd;u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9);else hurtEnemy(tg,dmg)}u.dir=tg.x<u.x?2:3;return}goal=tg}
+ const dmg=U.dmg*G.mods.pet*(G.mods.udmg||1)*(1+.3*(b.lv-1))*(G.home.aura>1&&Math.hypot(u.x-HOME.x,u.y-HOME.y)<4.6?G.home.aura:1);
+ if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=U.range){u.moving=false;if(u.cd<=0){u.cd=U.cd*(G.mods.ucd||1);u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9);else hurtEnemy(tg,dmg)}u.dir=tg.x<u.x?2:3;return}goal=tg}
  const dx=goal.x-u.x,dy=goal.y-u.y,d=Math.hypot(dx,dy);if(d<.15){u.moving=false;u.path=null;return}
- const sp=Math.min(d,U.spd*dt*(d>3?1.4:1));let vx=dx/d,vy=dy/d;
+ const sp=Math.min(d,U.spd*(G.mods.uspd||1)*dt*(d>3?1.4:1));let vx=dx/d,vy=dy/d;
  if(!lineClear(u.x,u.y,u.x+vx*Math.min(.8,d),u.y+vy*Math.min(.8,d),.26,0)){u.pathT=(u.pathT||0)-dt;if(!u.path||u.pathT<=0){u.path=astar(u.x,u.y,goal.x,goal.y,1);u.pathT=.45}
   if(u.path&&u.path.length){while(u.path.length>1&&Math.hypot(u.path[0].x-u.x,u.path[0].y-u.y)<.35)u.path.shift();const q=u.path[0],pd=Math.hypot(q.x-u.x,q.y-u.y)||.001;vx=(q.x-u.x)/pd;vy=(q.y-u.y)/pd} }
  const nx=u.x+vx*sp,ny=u.y+vy*sp;if(!solidAt(nx,ny,.26)){u.x=nx;u.y=ny}else{const ox=u.x+vx*sp,oy=u.y;if(!solidAt(ox,u.y,.26))u.x=ox;if(!solidAt(u.x,u.y+vy*sp,.26))u.y+=vy*sp;pushOut(u,.26)}
@@ -210,9 +225,9 @@ function slideAround(p,inp,sp){let best=null,bd=1.4;for(const s of SPOTS){const 
 function stepPlayer(p,dt){const inp=G.input[p.id]||{x:0,y:0};p.flash=Math.max(0,(p.flash||0)-dt);p.swing=Math.max(0,p.swing-dt);p.skillT=Math.max(0,(p.skillT||0)-dt);
  if(p.dead){p.respawn-=dt;if(p.respawn<=0){p.dead=0;p.hp=p.max;p.x=HOME.x;p.y=HOME.y+2}return}
  p.healFx=Math.max(0,(p.healFx||0)-dt);
- if(G.phase==='night'&&p.hp<p.max&&(G.t-(p.combat||0))>=4){p.hp=Math.min(p.max,p.hp+8*dt);p.healFx=.35;p.healAcc=(p.healAcc||0)+dt;if(p.healAcc>.4){p.healAcc=0;G.fx.push({k:'heal',x:p.x+(Math.random()-.5)*.3,y:p.y-.4,t:0,life:.55})}}
+ if(G.phase==='night'&&p.hp<p.max&&(G.t-(p.combat||0))>=4){p.hp=Math.min(p.max,p.hp+8*(G.mods.pregen||1)*dt);p.healFx=.35;p.healAcc=(p.healAcc||0)+dt;if(p.healAcc>.4){p.healAcc=0;G.fx.push({k:'heal',x:p.x+(Math.random()-.5)*.3,y:p.y-.4,t:0,life:.55})}}
  const m=Math.hypot(inp.x,inp.y),ox=p.x,oy=p.y;p.moving=m>.1;
- if(p.moving){const sp=4.2*dt*Math.min(1,m),inside=solidAt(p.x,p.y,.3);const nx=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);if(inside||!solidAt(nx,p.y,.3))p.x=nx;const ny=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);if(inside||!solidAt(p.x,ny,.3))p.y=ny;p.ph+=dt*11;
+ if(p.moving){const sp=4.2*(G.mods.pspd||1)*dt*Math.min(1,m),inside=solidAt(p.x,p.y,.3);const nx=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);if(inside||!solidAt(nx,p.y,.3))p.x=nx;const ny=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);if(inside||!solidAt(p.x,ny,.3))p.y=ny;p.ph+=dt*11;
   if(!inside&&Math.hypot(p.x-ox,p.y-oy)<sp*.35)slideAround(p,inp,sp);
   p.dir=Math.abs(inp.x)>Math.abs(inp.y)?(inp.x<0?2:3):(inp.y<0?1:0);p.face={x:inp.x,y:inp.y};
   if(Math.hypot(p.x-HOME.x,p.y-HOME.y)<HOME.r){const a=Math.atan2(p.y-HOME.y,p.x-HOME.x);p.x=HOME.x+Math.cos(a)*HOME.r;p.y=HOME.y+Math.sin(a)*HOME.r}}
@@ -277,7 +292,7 @@ function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark
   // 互相挤开
   const es=G.enemies;for(let i=0;i<es.length;i++)for(let k=i+1;k<es.length;k++){const a=es[i],b=es[k],rr=ENEMIES[a.k].r+ENEMIES[b.k].r,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d>0&&d<rr){const o=(rr-d)/2*.5;a.x-=dx/d*o;a.y-=dy/d*o;b.x+=dx/d*o;b.y+=dy/d*o}}for(const e of es)if(!e.dead)pushOut(e,ENEMIES[e.k].r,1);
   // 弹弓塔 + 家（胖宝扔奶瓶）
-  for(const s of SPOTS){const b=G.b[s.id];if(s.t!=='tower'||!b.lv||b.dead)continue;b.cd-=dt;if(b.cd>0)continue;const tg=nearestEnemy(s.x,s.y,bStat(s,'range',b.lv));if(tg){b.cd=bStat(s,'cd',b.lv);shoot({x:s.x,y:s.y-.6},tg,bStat(s,'dmg',b.lv)*(G.mods.tdmg||1),'pebble',12)}}
+  for(const s of SPOTS){const b=G.b[s.id];if(s.t!=='tower'||!b.lv||b.dead)continue;b.cd-=dt;if(b.cd>0)continue;const tg=nearestEnemy(s.x,s.y,bStat(s,'range',b.lv)*(G.mods.trange||1));if(tg){b.cd=bStat(s,'cd',b.lv)*(G.mods.trate||1);shoot({x:s.x,y:s.y-.6},tg,bStat(s,'dmg',b.lv)*(G.mods.tdmg||1),'pebble',12)}}
   G.home.cd-=dt;
   if((G.home.throwT||0)>0){const prev=G.home.throwT,mx=G.home.throwMax||THROW_MAX;G.home.throwT=Math.max(0,G.home.throwT-dt);
    const p0=1-prev/mx,p1=1-G.home.throwT/mx,rel=THROW_RELEASE/mx;
@@ -603,4 +618,4 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  for(const c of G.coins){const k=Math.min(1,c.t/.7),e=k*k,X0=sx(c.x),Y0=sy(c.y),X=X0+(view.gold.x-X0)*e,Y=Y0+(view.gold.y-Y0)*e-Math.sin(k*Math.PI)*T*1.2;ctx.save();ctx.fillStyle='#ffd23f';ctx.strokeStyle='#b8860b';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,T*.16,0,7);ctx.fill();ctx.stroke();ctx.restore()}
  for(const f of G.floats){ctx.save();ctx.globalAlpha=1-f.t/1.1;ctx.font=`900 ${T*(f.sm?.3:.4)}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#6b4a32';ctx.fillStyle=f.col;ctx.strokeText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.fillText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.restore()}
  if(G.phase==='night')drawOffscreen(W,H);drawMinimap(W,H)}
-window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf,useMap,flowAt,lineClear,pushOut,rebuildNav,bName,bDist,solidAt,enemySolid,enemyBlock,terrainBlock,spawnAt,astar,nearHome,homeUpCost,homeUpChoices,upgradeHome,applyHomeUp,rateStars,makeMods,buyBuff,upgradeHint,unitRespawn,panbaoPawWorld,panbaoPose,THROW_MAX,THROW_RELEASE,BOTTLE_FLY,inFan,faceAng};
+window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf,useMap,flowAt,lineClear,pushOut,rebuildNav,bName,bDist,solidAt,enemySolid,enemyBlock,terrainBlock,spawnAt,astar,nearHome,homeUpCost,homeUpChoices,upgradeHome,applyHomeUp,rateStars,makeMods,buyBuff,upgradeHint,unitRespawn,panbaoPawWorld,panbaoPose,THROW_MAX,THROW_RELEASE,BOTTLE_FLY,inFan,faceAng,demolish,demolishValue};
