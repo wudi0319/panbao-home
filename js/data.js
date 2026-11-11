@@ -3,7 +3,7 @@ const DOGS={yellow:{name:'鸡毛',ic:'🐶'},white:{name:'小白',ic:'🐩'}};
 const WEAPONS={
  spatula:{name:'锅铲',ic:'🍳',desc:'近战，前方 180° 扇面挥铲，扇内每个敌人都受伤',kind:'melee',range:1.5,dmg:16,cd:.45,
   skill:{name:'旋风锅铲',cd:9,desc:'转圈拍飞身边所有敌人'}},
- frisbee:{name:'飞盘',ic:'🥏',desc:'远程扔飞盘',kind:'ranged',range:5.5,dmg:15,cd:.6,
+ frisbee:{name:'飞盘',ic:'🥏',desc:'远程扔飞盘',kind:'ranged',range:4,dmg:15,cd:.6,
   skill:{name:'满天飞盘',cd:10,desc:'向四周扔出 10 个飞盘'}},
  bone:{name:'骨头棒槌',ic:'🦴',desc:'出手慢，砸一片',kind:'area',range:2.1,dmg:42,cd:1.2,
   skill:{name:'震地一击',cd:12,desc:'大范围重击并晕住敌人'},unlock:'win'}};
@@ -90,7 +90,7 @@ const UNITS={
  kitten:{name:'小猫',hp:45,dmg:7,range:.8,cd:.7,spd:3.2,r:.3},
  duck:{name:'小鸭',hp:30,dmg:6,range:3.5,cd:1,spd:3,r:.28}};
 const ENEMIES={
- raccoon:{name:'小偷浣熊',hp:22,spd:1.65,dmg:5,cd:.8,gold:1,r:.35,aggro:2,throw:2.0},
+ raccoon:{name:'小偷浣熊',hp:22,spd:1.65,dmg:5,cd:.8,gold:1,r:.35,aggro:3.5,throw:3.5},
  wolf:{name:'大灰狼',hp:48,spd:1.32,dmg:8,cd:1,gold:2,r:.45,aggro:2.6},
  bear:{name:'大笨熊',hp:180,spd:.8,dmg:21,cd:1.4,gold:6,r:.65,aggro:1.6,smash:1},
  boss:{name:'熊大王',hp:1100,spd:.7,dmg:36,cd:1.5,gold:30,r:.95,aggro:2,smash:1}};
