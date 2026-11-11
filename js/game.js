@@ -151,7 +151,7 @@ function bDist(s,x,y){const q=bNear(s,x,y);return Math.hypot(x-q.x,y-q.y)-(s.t==
 function wallHit(s,x,y,r,friend){for(const g of segsOf(s))if(friend?segFriendHit(g,x,y,r):segHit(g,x,y,r))return g;return null}
 function enemySolid(x,y,r){for(const s of SPOTS){const b=G&&G.b[s.id];if(!b||!b.lv||b.dead)continue;if(s.t==='wall'){if(wallHit(s,x,y,r,0))return s}else if(Math.hypot(x-s.x,y-s.y)<.75+r)return s}return null}
 function enemyBlock(x,y,r){return terrainBlock(x,y,r)||!!enemySolid(x,y,r)}
-function solidAt(x,y,r){if(terrainBlock(x,y,r))return true;for(const s of SPOTS){const b=G&&G.b[s.id];if(!b||!b.lv||b.dead)continue;if(s.t==='wall'){if(wallHit(s,x,y,r,1))return true}else if(Math.hypot(x-s.x,y-s.y)<.6+r)return true}return false}
+function solidAt(x,y,r,hero){if(terrainBlock(x,y,r))return true;for(const s of SPOTS){const b=G&&G.b[s.id];if(!b||!b.lv||b.dead)continue;if(hero&&s.t==='tower')continue;if(s.t==='wall'){if(wallHit(s,x,y,r,1))return true}else if(Math.hypot(x-s.x,y-s.y)<.6+r)return true}return false}
 function blocker(e,nx,ny){return enemySolid(nx,ny,ENEMIES[e.k].r)}
 function pushOut(o,r,en){const hit=en?(x,y)=>enemyBlock(x,y,r):(x,y)=>solidAt(x,y,r);if(!hit(o.x,o.y))return;
  for(let d=.2;d<3;d+=.18)for(let a=0;a<14;a++){const nx=o.x+Math.cos(a*Math.PI/7)*d,ny=o.y+Math.sin(a*Math.PI/7)*d;
@@ -254,13 +254,13 @@ function stepUnit(u,dt){const U=UNITS[u.k],s=spotOf(u.home),b=G.b[s.id];u.flash=
 // 被圆形建筑（塔/营地/菜园）挡住时，顺着边绕过去，不会卡住
 function slideAround(p,inp,sp){let best=null,bd=1.4;for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead||s.t==='wall')continue;const d=Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}
  if(!best)return;const rx=(p.x-best.x)/bd,ry=(p.y-best.y)/bd;let tx=-ry,ty=rx;if(tx*inp.x+ty*inp.y<0){tx=-tx;ty=-ty}
- const nx=clamp(p.x+tx*sp,.5,MAP_W-.5),ny=clamp(p.y+ty*sp,.5,MAP_H-.5);if(!solidAt(nx,ny,.3)){p.x=nx;p.y=ny}}
+ const nx=clamp(p.x+tx*sp,.5,MAP_W-.5),ny=clamp(p.y+ty*sp,.5,MAP_H-.5);if(!solidAt(nx,ny,.3,1)){p.x=nx;p.y=ny}}
 function stepPlayer(p,dt){const inp=G.input[p.id]||{x:0,y:0};p.flash=Math.max(0,(p.flash||0)-dt);p.swing=Math.max(0,p.swing-dt);p.skillT=Math.max(0,(p.skillT||0)-dt);
  if(p.dead){p.respawn-=dt;if(p.respawn<=0){p.dead=0;p.hp=p.max;p.x=HOME.x;p.y=HOME.y+2}return}
  p.healFx=Math.max(0,(p.healFx||0)-dt);
  if(G.phase==='night'&&p.hp<p.max&&(G.t-(p.combat||0))>=4){p.hp=Math.min(p.max,p.hp+4*(G.mods.pregen||1)*dt);p.healFx=.35;p.healAcc=(p.healAcc||0)+dt;if(p.healAcc>.4){p.healAcc=0;G.fx.push({k:'heal',x:p.x+(Math.random()-.5)*.3,y:p.y-.4,t:0,life:.55})}}
  const m=Math.hypot(inp.x,inp.y),ox=p.x,oy=p.y;p.moving=m>.1;
- if(p.moving){const sp=4.2*(G.mods.pspd||1)*dt*Math.min(1,m),inside=solidAt(p.x,p.y,.3);const nx=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);if(inside||!solidAt(nx,p.y,.3))p.x=nx;const ny=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);if(inside||!solidAt(p.x,ny,.3))p.y=ny;p.ph+=dt*11;
+ if(p.moving){const sp=4.2*(G.mods.pspd||1)*dt*Math.min(1,m),inside=solidAt(p.x,p.y,.3,1);const nx=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);if(inside||!solidAt(nx,p.y,.3,1))p.x=nx;const ny=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);if(inside||!solidAt(p.x,ny,.3,1))p.y=ny;p.ph+=dt*11;
   if(!inside&&Math.hypot(p.x-ox,p.y-oy)<sp*.35)slideAround(p,inp,sp);
   p.dir=Math.abs(inp.x)>Math.abs(inp.y)?(inp.x<0?2:3):(inp.y<0?1:0);p.face={x:inp.x,y:inp.y};
   if(Math.hypot(p.x-HOME.x,p.y-HOME.y)<HOME.r){const a=Math.atan2(p.y-HOME.y,p.x-HOME.x);p.x=HOME.x+Math.cos(a)*HOME.r;p.y=HOME.y+Math.sin(a)*HOME.r}}
