@@ -134,7 +134,10 @@ function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day',
  setT('hGold','💰 '+G.gold);setT('hNight',day?`☀️ 第 ${G.night+1} 天 · 共 ${NIGHTS} 夜`:G.phase==='night'?`🌙 第 ${G.night+1} 夜 / ${NIGHTS}`:G.phase==='win'?'🏆 通关啦':'💔 失败');
  setW('hHome',100*G.home.hp/G.home.max);setW('hHp',p.dead?0:100*p.hp/p.max);
  const s=play&&day&&!p.dead?Game.nearSpot(p):null;
- if(s){const b=G.b[s.id],c=Game.nextCost(s);setH('buildBtn',false);setT('buildBtn',c==null?`${BUILD[s.t].ic} ${bName(s)} 已满级`:`${BUILD[s.t].ic} ${b.lv?'升级':'建造'}${bName(s)}${b.lv?' → '+(b.lv+1)+'级':''} 💰${c}`);$('buildBtn').classList.toggle('poor',c==null||G.gold<c)}else setH('buildBtn',true);
+ if(s){const b=G.b[s.id],c=Game.nextCost(s),hint=c==null?'':upgradeHint(s,b.lv+1);setH('buildBtn',false);
+  const txt=c==null?`${BUILD[s.t].ic} ${bName(s)} 已满级`:`${BUILD[s.t].ic} ${b.lv?'升级':'建造'}${bName(s)}${b.lv?' → '+(b.lv+1)+'级':''}`;
+  const html=c==null?txt:`${txt}<small>${hint} 💰${c}</small>`;
+  const el=$('buildBtn');if(el._v!==html){el._v=html;el.innerHTML=html}el.classList.toggle('poor',c==null||G.gold<c)}else setH('buildBtn',true);
  const hc=play&&day&&!p.dead&&Game.nearHome(p)?Game.homeUpCost():null;
  if(hc!=null){setH('homeBtn',false);setT('homeBtn',`🏠 升级老家（${G.home.up+1}/3）💰${hc}`);$('homeBtn').classList.toggle('poor',G.gold<hc)}else setH('homeBtn',true);
  setH('nightBtn',!day||!play);

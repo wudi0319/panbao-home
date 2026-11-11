@@ -153,3 +153,6 @@ body.on-modal #joy,body.on-modal #acts{visibility:hidden;pointer-events:none}
  .card>b{margin:4px 0 2px}
  .prep-card .prep-map{font-size:12px}
 }
+
+#buildBtn{white-space:normal;text-align:right;line-height:1.25;max-width:58vw;padding-top:8px;padding-bottom:8px}
+#buildBtn small{display:block;font-size:.8em;font-weight:800;opacity:.92;margin-top:1px}

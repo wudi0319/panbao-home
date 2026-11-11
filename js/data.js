@@ -16,6 +16,7 @@ const BUFFS={
  stone:{name:'坚固的家',ic:'🏠',desc:'家和城墙血量 +50%',cost:3,unlock:{best:3}},
  tower:{name:'弹弓熟练',ic:'🏹',desc:'弹弓塔伤害 +25%',cost:3,unlock:{map:'barbican'}},
  harvest:{name:'丰收年',ic:'🌾',desc:'每座菜园早上多收 2 金',cost:4,unlock:{stars:6}},
+ hatch:{name:'快快长大',ic:'🥚',desc:'小猫小鸭倒下后更快复活（缩短 30%）',cost:4,unlock:{stars:6}},
  swift:{name:'身手敏捷',ic:'⚡',desc:'技能冷却缩短 20%',cost:4,unlock:{map:'garden'}},
  might:{name:'热乎乎的手',ic:'🔥',desc:'自己攻击 +20%',cost:5,unlock:{stars:8}},
  cheapw:{name:'砌墙能手',ic:'🧱',desc:'城墙每级少花 1 金币',cost:5,unlock:{stars:10}},
@@ -40,20 +41,21 @@ const HOME_UPS={
  regen:{name:'暖暖家',ic:'🩹',desc:'家里会慢慢回血'},
  aura:{name:'加油鼓劲',ic:'📣',desc:'家附近的小动物攻击更高'},
  beds:{name:'多一张小床',ic:'🐣',desc:'每个营地多 1 只小动物'},
- cozy:{name:'热乎乎的炉子',ic:'🔥',desc:'靠近家的敌人走得更慢'}
+ cozy:{name:'热乎乎的炉子',ic:'🔥',desc:'靠近家的敌人走得更慢'},
+ recall:{name:'招招手',ic:'👋',desc:'小猫小鸭复活加快 25%'}
 };
 // 建筑每级数值（下标 0 = 1级）
 const BUILD={
- wall:{name:'城墙',ic:'🧱',cost:[3,6,12],hp:[150,300,520]},
+ wall:{name:'城墙',ic:'🧱',cost:[3,6,12],hp:[150,300,520],armor:[0,.12,.25]},
  tower:{name:'弹弓塔',ic:'🏹',cost:[8,14,22],hp:[80,140,220],dmg:[8,13,20],range:[5,5.6,6.2],cd:[.9,.75,.6]},
- cats:{name:'小猫营',ic:'🐱',cost:[8,14,22],hp:[120,200,300],n:[2,3,4],unit:'kitten'},
- ducks:{name:'小鸭营',ic:'🐤',cost:[8,14,22],hp:[120,200,300],n:[2,3,4],unit:'duck'},
+ cats:{name:'小猫营',ic:'🐱',cost:[8,14,22],hp:[120,200,300],n:[2,3,4],unit:'kitten',rev:[20,16,12]},
+ ducks:{name:'小鸭营',ic:'🐤',cost:[8,14,22],hp:[120,200,300],n:[2,3,4],unit:'duck',rev:[20,16,12]},
  farm:{name:'菜园',ic:'🥕',cost:[5,10,16],hp:[60,90,130],gold:[3,5,8]}};
 const UNITS={
  kitten:{name:'小猫',hp:45,dmg:7,range:.8,cd:.7,spd:3.2,r:.3},
  duck:{name:'小鸭',hp:30,dmg:6,range:3.5,cd:1,spd:3,r:.28}};
 const ENEMIES={
- raccoon:{name:'小偷浣熊',hp:20,spd:1.6,dmg:4,cd:.8,gold:1,r:.35,aggro:2},
+ raccoon:{name:'小偷浣熊',hp:20,spd:1.6,dmg:4,cd:.8,gold:1,r:.35,aggro:2,throw:2.0},
  wolf:{name:'大灰狼',hp:46,spd:1.3,dmg:8,cd:1,gold:2,r:.45,aggro:2.6},
  bear:{name:'大笨熊',hp:170,spd:.8,dmg:20,cd:1.4,gold:6,r:.65,aggro:1.6,smash:1},
  boss:{name:'熊大王',hp:1000,spd:.7,dmg:34,cd:1.5,gold:30,r:.95,aggro:2,smash:1}};
@@ -81,7 +83,7 @@ function coreRing(){return[
  mkCorner('wNW',11,11,1,1),mkCorner('wNE',23,11,-1,1),mkCorner('wSW',11,23,1,-1),mkCorner('wSE',23,23,-1,-1)
 ]}
 function coreBuildings(){return[
- {id:'t1',t:'tower',x:15,y:13},{id:'t2',t:'tower',x:19,y:21},{id:'t3',t:'tower',x:13,y:19},{id:'t4',t:'tower',x:21,y:15},
+ {id:'t1',t:'tower',x:12.45,y:12.45},{id:'t2',t:'tower',x:21.55,y:21.55},{id:'t3',t:'tower',x:12.45,y:21.55},{id:'t4',t:'tower',x:21.55,y:12.45},
  {id:'bC',t:'cats',x:19.6,y:13.6},{id:'bD',t:'ducks',x:14.4,y:20.4},
  {id:'f1',t:'farm',x:13.6,y:15},{id:'f2',t:'farm',x:20.4,y:19},{id:'f3',t:'farm',x:8,y:26},{id:'f4',t:'farm',x:26,y:8}
 ]}
@@ -125,7 +127,7 @@ const MAPS={
   terrain:plusTerr(17,17,34,34),spots:[
    ...coreRingAt(12.2,12.2,21.8,21.8,'i'),
    ...coreRingAt(6.4,6.4,27.6,27.6,'o',{n:-3,s:3,w:-3,e:3}),
-   {id:'t1',t:'tower',x:9.2,y:17},{id:'t2',t:'tower',x:24.8,y:17},{id:'t3',t:'tower',x:17,y:9.2},{id:'t4',t:'tower',x:17,y:24.8},
+   {id:'t1',t:'tower',x:10.85,y:10.85},{id:'t2',t:'tower',x:23.15,y:10.85},{id:'t3',t:'tower',x:10.85,y:23.15},{id:'t4',t:'tower',x:23.15,y:23.15},
    {id:'bC',t:'cats',x:15.2,y:15.2},{id:'bD',t:'ducks',x:18.8,y:18.8},
    {id:'f1',t:'farm',x:9.3,y:9.3},{id:'f2',t:'farm',x:24.7,y:24.7},{id:'f3',t:'farm',x:24.7,y:9.3},{id:'f4',t:'farm',x:9.3,y:24.7}
   ]},
@@ -137,7 +139,7 @@ const MAPS={
   spots:[
    ...coreRingAt(11,5.6,23,17, ''),
    mkWall('gW',8.3,21,3.2,0,GATE_W),mkWall('gM',17,21,3.2,0,GATE_W),mkWall('gE',25.7,21,3.2,0,GATE_W),
-   {id:'t1',t:'tower',x:8.3,y:18.0},{id:'t2',t:'tower',x:17,y:19.0},{id:'t3',t:'tower',x:25.7,y:18.0},{id:'t4',t:'tower',x:20.2,y:13.2},
+   {id:'t1',t:'tower',x:7.15,y:17.85},{id:'t2',t:'tower',x:17,y:19.0},{id:'t3',t:'tower',x:26.85,y:17.85},{id:'t4',t:'tower',x:21.55,y:15.55},
    {id:'bC',t:'cats',x:13.6,y:13.4},{id:'bD',t:'ducks',x:20.6,y:8.6},
    {id:'f1',t:'farm',x:13.8,y:8.4},{id:'f2',t:'farm',x:17,y:26.6},{id:'f3',t:'farm',x:8.3,y:26.6}
   ]},
@@ -146,7 +148,7 @@ const MAPS={
   terrain:plusTerr(17,17,34,34),spots:[
    ...coreRing(),
    ...farmPen('pA',7.2,7.2,17,17),...farmPen('pB',26.8,7.2,17,17),...farmPen('pC',7.2,26.8,17,17),...farmPen('pD',26.8,26.8,17,17),
-   {id:'t1',t:'tower',x:15,y:13},{id:'t2',t:'tower',x:19,y:21},{id:'t3',t:'tower',x:13,y:19},{id:'t4',t:'tower',x:21,y:15},
+   {id:'t1',t:'tower',x:12.45,y:12.45},{id:'t2',t:'tower',x:21.55,y:21.55},{id:'t3',t:'tower',x:12.45,y:21.55},{id:'t4',t:'tower',x:21.55,y:12.45},
    {id:'bC',t:'cats',x:19.6,y:13.6},{id:'bD',t:'ducks',x:14.4,y:20.4}
   ]},
  mountain:{id:'mountain',name:'盘山公路',ic:'⛰️',desc:'悬崖盘道，胖宝住在山顶。沿路有好几道关卡，要一层一层守',
@@ -179,10 +181,10 @@ const MAPS={
    mkWall('cp2',17,21.9,5.0,1,GATE_W),
    mkWall('cp3',17,16.9,5.0,1,GATE_W),
    mkWall('cp4',17,9.2,5.2,0,GATE_W),
-   {id:'t1',t:'tower',x:13.8,y:29.8},{id:'t1b',t:'tower',x:20.2,y:29.8},
-   {id:'t2',t:'tower',x:15.0,y:20.6},{id:'t2b',t:'tower',x:19.2,y:20.6},
-   {id:'t3',t:'tower',x:15.0,y:15.6},{id:'t3b',t:'tower',x:19.2,y:15.6},
-   {id:'t4',t:'tower',x:15.0,y:7.5},{id:'t4b',t:'tower',x:19.0,y:7.5},
+   {id:'t1',t:'tower',x:13.6,y:29.85},{id:'t1b',t:'tower',x:20.4,y:29.85},
+   {id:'t2',t:'tower',x:15.15,y:20.7},{id:'t2b',t:'tower',x:18.85,y:20.7},
+   {id:'t3',t:'tower',x:15.15,y:15.7},{id:'t3b',t:'tower',x:18.85,y:15.7},
+   {id:'t4',t:'tower',x:14.35,y:7.8},{id:'t4b',t:'tower',x:19.65,y:7.8},
    {id:'bC',t:'cats',x:13.4,y:4.4},{id:'bD',t:'ducks',x:20.6,y:4.4},
    {id:'f1',t:'farm',x:12.2,y:6.8},{id:'f2',t:'farm',x:21.8,y:6.8}
   ]}
@@ -194,10 +196,17 @@ function useMap(id){MAP=MAPS[id]||MAPS.yard;MAP_W=MAP.w;MAP_H=MAP.h;HOME=MAP.hom
 useMap('yard');
 function nightDirs(n){const a=(MAP&&MAP.nightsDir)||ND_STD;return a[Math.min(n,a.length)-1]||a[a.length-1]}
 function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5,m=(typeof G!=='undefined'&&G&&G.mods)||{};
- const add=(k,c0,t0=0,t1=dur)=>{const cnt=k==='boss'?c0:Math.round(c0*cm);for(let i=0;i<cnt;i++)out.push({t:t0+(t1-t0)*(cnt>1?i/(cnt-1):.5)+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
+ const add=(k,c0,t0=0,t1=dur)=>{const cnt=k==='boss'?c0:Math.round(c0*cm*1.15);for(let i=0;i<cnt;i++)out.push({t:t0+(t1-t0)*(cnt>1?i/(cnt-1):.5)+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
  add('raccoon',4+n*2);if(n>=2||m.earlyWolf)add('wolf',n>=2?n*2-1:2,4);if(n>=3)add('bear',n-2,8);
  if(n===NIGHTS){const bt=dur*(m.bossEarly||.6);add('boss',1,bt,bt)}
  return out.sort((a,b)=>a.t-b.t)}
+// 下一级（或刚建造的 1 级）加成说明，给建造按钮用
+function upgradeHint(s,lv){const B=BUILD[s.t];if(!B||lv<1||lv>3)return '';
+ if(s.t==='tower'){return lv===1?`伤害 ${B.dmg[0]} · 射程 ${B.range[0]}`:`伤害 ${B.dmg[lv-2]}→${B.dmg[lv-1]} · 射更远更快`}
+ if(s.t==='cats'||s.t==='ducks'){const r=B.rev||[20,16,12];return lv===1?`${B.n[0]} 只 · 复活 ${r[0]} 秒`:`${B.n[lv-2]}→${B.n[lv-1]} 只 · 攻击更高 · 复活 ${r[lv-1]} 秒`}
+ if(s.t==='farm'){return lv===1?`早上 +${B.gold[0]} 金`:`早上 ${B.gold[lv-2]}→${B.gold[lv-1]} 金`}
+ if(s.t==='wall'){const ar=B.armor||[];return lv===1?`生命 ${B.hp[0]}`:`生命 ${B.hp[lv-2]}→${B.hp[lv-1]}${ar[lv-1]?' · 更耐打':''}`}
+ return ''}
 function starTotal(r){return MAP_ORDER.reduce((s,id)=>s+((r&&r.maps&&r.maps[id]&&r.maps[id].stars)||0),0)}
 function starSpendable(r){return Math.max(0,starTotal(r)-(r&&r.starSpent||0))}
 function starBar(n,max=5){n=Math.max(0,Math.min(max,n|0));return '★'.repeat(n)+'☆'.repeat(max-n)}
@@ -216,7 +225,7 @@ function makeMods(buffs,debuffs,diff){const B=new Set(buffs||[]),D=new Set(debuf
   espd:(d.spd||1)*(D.has('zoom')?1.25:1)*(D.has('nightmare')?1.15:1),
   tdmg:(B.has('tower')?1.25:1)*(D.has('storm')?0.8:1),pdmg:(B.has('might')?1.2:1)*(D.has('storm')?0.8:1),
   scd:B.has('swift')?0.8:1,wcut:B.has('cheapw')?1:0,farmPlus:B.has('harvest')?2:0,luck:B.has('luck')?1:0,
-  beds:B.has('pals')?1:0,earlyWolf:D.has('late')?1:0,bossHp:D.has('bossy')?1.5:1,bossEarly:D.has('bossy')?.4:.6}}
+  beds:B.has('pals')?1:0,rev:B.has('hatch')?0.7:1,earlyWolf:D.has('late')?1:0,bossHp:D.has('bossy')?1.5:1,bossEarly:D.has('bossy')?.4:.6}}
 function qualityStars(G){if(!G)return 0;const frac=G.home.max?G.home.hp/G.home.max:0;let q=1;if(frac>=.5)q=2;if(frac>=.8&&!(G.stats&&G.stats.broke))q=3;return q}
 function debuffStars(list){return (list||[]).reduce((s,id)=>s+((DEBUFFS[id]&&DEBUFFS[id].star)||0),0)}
 function rateStars(G){return Math.min(5,qualityStars(G)+debuffStars(G&&G.debuffs))}
