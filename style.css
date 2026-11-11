@@ -136,3 +136,20 @@ button{touch-action:manipulation;font-family:inherit}
 .end-stars{font-size:28px;letter-spacing:2px;color:#ffd23f;text-shadow:0 1px 0 #6b4a32;margin:4px 0;font-weight:900}
 .home-choices{display:grid;grid-template-columns:1fr;gap:8px}
 .act.home{background:#8fd27a;box-shadow:0 4px 0 #5ea34e;color:#2a4a20}
+
+/* v0.7.1 菜单时藏起游戏控件；短屏准备页可下滑提示 */
+body.on-menu #hud,body.on-menu #joy,body.on-menu #acts,body.on-menu #hint{visibility:hidden;pointer-events:none}
+body.on-modal #joy,body.on-modal #acts{visibility:hidden;pointer-events:none}
+#pickBuff.more,#pickDebuff.more{-webkit-mask-image:linear-gradient(#000 0%,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(#000 0%,#000 calc(100% - 22px),transparent)}
+@media (max-width:400px){
+ .pick button small{font-size:10px;line-height:1.25}
+ #pickMap button{padding:5px 3px;font-size:12px}
+ .card{padding:10px 12px}
+}
+@media (max-height:680px) and (orientation:portrait){
+ #start .card h1{font-size:22px;margin:0}
+ #start .card .sub{margin:0 0 4px;font-size:12px}
+ .pick canvas{width:52px;height:52px}
+ .card>b{margin:4px 0 2px}
+ .prep-card .prep-map{font-size:12px}
+}

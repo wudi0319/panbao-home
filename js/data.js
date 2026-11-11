@@ -1,11 +1,11 @@
 // 保卫胖宝 — 游戏数据（武器 / 天赋 / 建筑 / 敌人 / 地图 / 每晚的敌人）
 const DOGS={yellow:{name:'鸡毛',ic:'🐶'},white:{name:'小白',ic:'🐩'}};
 const WEAPONS={
- spatula:{name:'锅铲',ic:'🍳',desc:'近战拍拍，出手快',kind:'melee',range:1.5,dmg:20,cd:.45,maxHit:3,
+ spatula:{name:'锅铲',ic:'🍳',desc:'近战，出手快',kind:'melee',range:1.5,dmg:20,cd:.45,maxHit:3,
   skill:{name:'旋风锅铲',cd:9,desc:'转圈拍飞身边所有敌人'}},
  frisbee:{name:'飞盘',ic:'🥏',desc:'远程扔飞盘',kind:'ranged',range:5.5,dmg:15,cd:.6,
   skill:{name:'满天飞盘',cd:10,desc:'向四周扔出 10 个飞盘'}},
- bone:{name:'骨头棒槌',ic:'🦴',desc:'慢，但一下砸一片',kind:'area',range:2.1,dmg:42,cd:1.2,
+ bone:{name:'骨头棒槌',ic:'🦴',desc:'出手慢，砸一片',kind:'area',range:2.1,dmg:42,cd:1.2,
   skill:{name:'震地一击',cd:12,desc:'大范围重击并晕住敌人'},unlock:'win'}};
 const TALENTS={}; // 旧天赋已并入加成 / 挑战
 const BUFF_MAX=3,DEBUFF_MAX=3,HOME_UP_COST=[8,12,18];

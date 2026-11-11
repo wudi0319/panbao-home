@@ -32,7 +32,8 @@ function renderPrep(){const r=Game.loadRec(),all=allOn(),sm=MAPS[sel.map];
   if(!un)return`<button data-d="${k}" class="lock">${d.ic} ${d.name}<small>🔒 ${condText(d.unlock)}</small></button>`;
   return`<button data-d="${k}" class="${on?'on':''}">${d.ic} ${d.name}<small>+${d.star} 星 · ${d.desc}</small></button>`}).join('');
  const rg=starRange(sel.debuffs);
- $('prepForecast').textContent='本关通关可得 '+rg.min+'–'+rg.max+' 星'+(sel.debuffs.length?'（挑战 +'+debuffStars(sel.debuffs)+'）':'')+' · 已选加成 '+sel.buffs.length+'/'+BUFF_MAX}
+ $('prepForecast').textContent='本关通关可得 '+rg.min+'–'+rg.max+' 星'+(sel.debuffs.length?'（挑战 +'+debuffStars(sel.debuffs)+'）':'')+' · 已选加成 '+sel.buffs.length+'/'+BUFF_MAX;
+ markScroll($('pickBuff'));markScroll($('pickDebuff'))}
 function openPrep(){renderPrep();$('start').classList.add('hidden');$('prep').classList.remove('hidden')}
 function closePrep(){$('prep').classList.add('hidden');$('start').classList.remove('hidden');renderStart()}
 function startRun(){Game.newGame({dog:sel.dog,weapon:sel.weapon,map:sel.map,buffs:sel.buffs,debuffs:sel.debuffs});paused=false;$('pause').classList.add('hidden');$('start').classList.add('hidden');$('prep').classList.add('hidden');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('hMe').textContent=DOGS[sel.dog].ic;tut.start();SFX.play('click');measure()}
@@ -51,6 +52,10 @@ $('pickDebuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;cons
  if(b.classList.contains('lock'))return toast(condText(DEBUFFS[k].unlock)||'还没解锁哦');
  const i=sel.debuffs.indexOf(k);if(i>=0)sel.debuffs.splice(i,1);else{if(sel.debuffs.length>=DEBUFF_MAX){toast('最多选 '+DEBUFF_MAX+' 个挑战');return}sel.debuffs.push(k)}renderPrep()};
 $('againBtn').onclick=()=>{SFX.play('click');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('prep').classList.add('hidden');renderStart();$('start').classList.remove('hidden')};
+function syncChrome(){const menu=!$('start').classList.contains('hidden')||!$('prep').classList.contains('hidden');
+ const modal=menu||!$('pause').classList.contains('hidden')||!$('homeUp').classList.contains('hidden')||!$('end').classList.contains('hidden');
+ document.body.classList.toggle('on-menu',menu);document.body.classList.toggle('on-modal',modal)}
+function markScroll(el){if(!el)return;const upd=()=>el.classList.toggle('more',el.scrollHeight>el.clientHeight+10&&el.scrollTop+el.clientHeight<el.scrollHeight-8);el.onscroll=upd;requestAnimationFrame(upd)}
 let toastT;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400)}
 Game.hooks.toast=toast;Game.hooks.sfx=k=>SFX.play(k);Game.hooks.coin=()=>{const g=$('hGold');g.classList.remove('bump');void g.offsetWidth;g.classList.add('bump')};
 function freshUnlocks(was,r){const nu=[];if(r.wins>0&&!(was.wins>0))nu.push('🦴 骨头棒槌');
@@ -62,12 +67,12 @@ Game.hooks.end=(win,was,r)=>{const G=Game.G;$('endIcon').textContent=win?'🏆':
  if(win){const got=G.stats.stars||0,gain=G.stats.starGain||0,frac=Math.round(100*G.home.hp/G.home.max);
   $('endStars').textContent=starBar(got);$('endStars').classList.remove('hidden');
   $('endText').textContent=`守住了全部 ${NIGHTS} 个晚上，打倒 ${G.stats.kills} 个敌人！家还剩 ${frac}% 血`+(G.stats.broke?'，有建筑被打坏过。':'，建筑都保住了。')+` 获得 ${got} 星`+(gain?`（新攒 ${gain} 颗，还可花 ${starSpendable(r)}）`:'（这关最高星没涨）');}
- else{$('endStars').textContent='';$('endStars').classList.add('hidden');$('endText').textContent=`守住了 ${G.night} 夜，打倒 ${G.stats.kills} 个敌人。再试一次吧！`}
+ else{$('endStars').textContent='';$('endStars').classList.add('hidden');$('endText').textContent=`在第 ${G.night+1} 夜没守住，打倒 ${G.stats.kills} 个敌人。再试一次吧！`}
  const nu=freshUnlocks(was,r);$('endUnlock').textContent=nu.length?'新解锁：'+nu.join('、'):'';setTimeout(()=>$('end').classList.remove('hidden'),600)};
 let homePick=null;
 function openHomeUp(){const G=Game.G,c=Game.homeUpCost();if(c==null)return;
  homePick=Game.homeUpChoices();$('homeUpTitle').textContent='🏠 升级老家（第 '+(G.home.up+1)+' 次）';
- $('homeUpSub').textContent='花 '+c+' 金币选一个加成，本局还能再升 '+(3-G.home.up)+' 次（含这次）';
+ $('homeUpSub').textContent='花 '+c+' 金币选一个加成。每局最多 3 次，这是第 '+(G.home.up+1)+' 次';
  $('homeUpChoices').innerHTML=homePick.map(id=>{const u=HOME_UPS[id];return`<button data-h="${id}">${u.ic} ${u.name}<small>${u.desc}</small></button>`}).join('');
  $('homeUp').classList.remove('hidden');SFX.play('click')}
 function closeHomeUp(){$('homeUp').classList.add('hidden');homePick=null}
@@ -111,7 +116,7 @@ function readInput(){let x=jv.x,y=jv.y;if(keys.has('a')||keys.has('arrowleft'))x
  const m=Math.hypot(x,y);return m>1?{x:x/m,y:y/m}:{x,y}}
 // ---- 新手引导（只在第一次玩时出现，存在手机里） ----
 const TUT_KEY='panbao-tut-v1';
-const tut={step:-1,start(){this.step=localStorage.getItem(TUT_KEY)?-1:0;if(this.step<0)toast('天亮了，走到虚线框旁边建造，保护胖宝！')},
+const tut={step:-1,start(){this.step=localStorage.getItem(TUT_KEY)?-1:0},
  on(ev){const need=['move','build','night','skill'][this.step];if(ev!==need)return;this.step++;if(this.step>=4){this.step=-1;localStorage.setItem(TUT_KEY,'1');toast('👍 学会啦！守住 7 个晚上就赢')}},
  text(G){if(this.step<0)return'';if(this.step===2&&G.phase==='night')this.step=3;if(this.step===3&&G.phase==='day'){this.step=-1;localStorage.setItem(TUT_KEY,'1');return''}
   return['👈 按住屏幕左边拖动，就能走路（左上角是小地图）','走到闪光的虚线框旁边，点右下角「建造」','建好了！准备好就点「🌙 开始入夜」','敌人来了！靠近会自动打，点「'+WEAPONS[me().weapon].skill.name+'」放大招'][this.step]}};
@@ -148,6 +153,6 @@ let last=performance.now(),fpsN=0,fpsT=0;const showFps=/fps/.test(location.searc
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const G=Game.G;
  const blocked=paused||!$('homeUp').classList.contains('hidden')||!$('prep').classList.contains('hidden')||!$('start').classList.contains('hidden');
  if(G&&!blocked&&G.phase!=='win'&&G.phase!=='lose'){G.input[G.me]=readInput();Game.step(dt)}else if(G)G.input[G.me]={x:0,y:0}
- Game.render();hud();if(showFps){fpsN++;fpsT+=dt;if(fpsT>1){$('hint').textContent+=' · '+fpsN+'fps';fpsN=0;fpsT=0}}requestAnimationFrame(frame)}
-renderStart();measure();requestAnimationFrame(frame);
+ syncChrome();Game.render();hud();if(showFps){fpsN++;fpsT+=dt;if(fpsT>1){$('hint').textContent+=' · '+fpsN+'fps';fpsN=0;fpsT=0}}requestAnimationFrame(frame)}
+renderStart();syncChrome();measure();requestAnimationFrame(frame);
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
