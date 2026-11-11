@@ -7,14 +7,16 @@ function drawDogIcons(){document.querySelectorAll('#pickDog canvas').forEach(c=>
 function renderStart(){const r=Game.loadRec();
  $('pickWeapon').innerHTML=Object.entries(WEAPONS).map(([k,w])=>{const ok=unlocked(w.unlock,r);if(!ok&&sel.weapon===k)sel.weapon='spatula';
   return`<button data-w="${k}" class="${sel.weapon===k?'on':''} ${ok?'':'lock'}">${w.ic} ${w.name}<small>${ok?w.desc:'🔒 '+unlockText(w.unlock)}</small></button>`}).join('');
- if(!unlocked((MAPS[sel.map]||{}).unlock,r))sel.map='yard';
- $('pickMap').innerHTML=Object.values(MAPS).map(m=>{const ok=unlocked(m.unlock,r);
-  return`<button data-map="${m.id}" class="${sel.map===m.id?'on':''} ${ok?'':'lock'}">${m.ic} ${m.name}<small>${ok?m.desc:'🔒 '+unlockText(m.unlock)}</small></button>`}).join('');
+ const all=$('unlockAll').checked;if(!mapUnlocked(r,sel.map,all))sel.map='yard';
+ $('pickMap').innerHTML=MAP_ORDER.map(id=>{const m=MAPS[id],ok=mapUnlocked(r,id,all),cleared=mapCleared(r,id),n=MAP_ORDER.indexOf(id)+1;
+  return`<button data-map="${m.id}" class="${sel.map===m.id?'on':''} ${ok?'':'lock'} ${cleared?'cleared':''}">${m.ic} ${m.name}<small>${ok?(cleared?'★ 已通关':'第 '+n+' 关'):'🔒 先通关上一关'}</small></button>`}).join('');
+ const sm=MAPS[sel.map];$('mapDesc').textContent=sm?(sm.ic+' '+sm.desc):'';
  sel.talents=sel.talents.filter(k=>unlocked(TALENTS[k].unlock,r));
  $('pickTalent').innerHTML=Object.entries(TALENTS).map(([k,t])=>{const ok=unlocked(t.unlock,r);
   return`<button data-t="${k}" class="${sel.talents.includes(k)?'on':''} ${ok?'':'lock'} ${t.challenge?'ch':''}">${t.ic} ${t.name}<small>${ok?t.desc:'🔒 '+unlockText(t.unlock)}</small></button>`}).join('');
  document.querySelectorAll('#pickDog button').forEach(b=>b.classList.toggle('on',b.dataset.dog===sel.dog));
- $('rec').textContent=r.best||r.wins?`最好成绩：守住 ${r.best} 夜 · 通关 ${r.wins} 次`:'';drawDogIcons()}
+ const nClear=MAP_ORDER.filter(id=>mapCleared(r,id)).length;
+ $('rec').textContent=r.best||r.wins?`最好成绩：守住 ${r.best} 夜 · 通关 ${r.wins} 次 · 已过 ${nClear}/${MAP_ORDER.length} 关`:'';drawDogIcons()}
 $('pickDog').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel.dog=b.dataset.dog;renderStart()};
 $('pickWeapon').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.weapon=b.dataset.w;renderStart()};
 $('pickMap').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.map=b.dataset.map;renderStart()};
@@ -27,7 +29,8 @@ let toastT;function toast(m){const t=$('toast');t.textContent=m;t.classList.add(
 Game.hooks.toast=toast;Game.hooks.sfx=k=>SFX.play(k);Game.hooks.coin=()=>{const g=$('hGold');g.classList.remove('bump');void g.offsetWidth;g.classList.add('bump')};
 Game.hooks.end=(win,was,r)=>{const G=Game.G;$('endIcon').textContent=win?'🏆':'😭';$('endTitle').textContent=win?'胖宝安全啦！':'家被攻破了…';
  $('endText').textContent=win?`守住了全部 ${NIGHTS} 个晚上，打倒 ${G.stats.kills} 个敌人！`:`守住了 ${G.night} 夜，打倒 ${G.stats.kills} 个敌人。再试一次吧！`;
- const nu=[];if(r.wins>0&&!(was.wins>0))nu.push('🦴 骨头棒槌','🏯 瓮城地图');if(r.best>=3&&!(was.best>=3))nu.push('🏠 坚固的家','🐺 挑战：狼来了');
+ const nu=[];if(r.wins>0&&!(was.wins>0))nu.push('🦴 骨头棒槌');if(r.best>=3&&!(was.best>=3))nu.push('🏠 坚固的家','🐺 挑战：狼来了');
+ const mid=G.map||'yard',ix=MAP_ORDER.indexOf(mid);if(win&&ix>=0&&ix<MAP_ORDER.length-1){const wasClear=was.maps&&was.maps[mid]&&was.maps[mid].wins>0;if(!wasClear){const nxt=MAPS[MAP_ORDER[ix+1]];nu.push(nxt.ic+' '+nxt.name)}}
  $('endUnlock').textContent=nu.length?'新解锁：'+nu.join('、'):'';setTimeout(()=>$('end').classList.remove('hidden'),600)};
 // ---- 按钮 ----
 const me=()=>Game.G&&Game.G.players[Game.G.me];
@@ -92,7 +95,7 @@ function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day';
   // 小地图放大时：横屏把提示放到地图右边；竖屏放到地图下面，不挡地图
   st.setProperty('--mm',(!M.big||wide?Math.round(M.s):0)+'px');st.setProperty('--hudb',Math.round(M.big&&!wide?M.y+M.s+4:$('hud').getBoundingClientRect().bottom)+'px');placeToast()}
  const tt=tut.text(G);let h=tt;
- if(!h){if(day)h=s?'点右下角按钮建造 / 升级':'今晚敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来 · 把围墙连成一圈，门只有自己人能过';
+ if(!h){if(day){const tip=MAP.id==='mountain'?'沿盘山公路一层一层守，守不住就往上撤':MAP.id==='bridge'?'守住桥上的门，别让它们过河':MAP.id==='fields'?'四个菜园各自围起来':'把门建好，只有自己人能过';h=s?'点右下角按钮建造 / 升级':'今晚敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来 · '+tip}
   else if(G.phase==='night')h=p.dead?`${DOGS[p.dog].name}复活中… ${Math.ceil(p.respawn)}`:`敌人还剩 ${G.enemies.length+G.spawnQ.length} 个 · 靠近会自动打`;else h=''}
  if($('hint')._v!==h||$('hint').classList.contains('tut')!==!!tt){setT('hint',h);$('hint').classList.toggle('tut',!!tt);placeToast()}
  Game.view.guide=day&&(tut.step===1||tut.step===0)&&!G.night?(guideSpot(G,p)||{}).id||null:null}

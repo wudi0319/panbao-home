@@ -34,8 +34,19 @@ function segsOf(s){return s.segs||[{x:s.x,y:s.y,len:s.len||5.4,v:!!s.v,gate:s.ga
 function mkGate(id,x,y,v){return{id,t:'wall',kind:'gate',x,y,v,segs:[{x,y,len:4.4,v,gate:GATE_W}]}}
 function mkCorner(id,cx,cy,sx,sy){const arm=4.05,m=arm/2;return{id,t:'wall',kind:'corner',x:cx+sx*1.15,y:cy+sy*1.15,segs:[{x:cx+sx*m,y:cy,len:arm,v:0,gate:0},{x:cx,y:cy+sy*m,len:arm,v:1,gate:0}]}}
 function mkWall(id,x,y,len,v,gate){return{id,t:'wall',kind:gate?'gate':'wall',x,y,v,segs:[{x,y,len,v,gate:gate||0}]}}
+function mkCornerArms(id,cx,cy,lenH,lenV,sx,sy){return{id,t:'wall',kind:'corner',x:cx+sx*Math.min(1.15,lenH*.45),y:cy+sy*Math.min(1.15,lenV*.45),segs:[{x:cx+sx*(lenH/2),y:cy,len:lenH,v:0,gate:0},{x:cx,y:cy+sy*(lenV/2),len:lenV,v:1,gate:0}]}}
 function bName(s){return s.t==='wall'&&s.kind==='gate'?'城门':BUILD[s.t].name}
-// 核心一圈：11..23 的方环，四边路中央是门，四角是 L 形墙，接缝重叠，围起来没有缝
+function R(x,y,w,h){return{x,y,w,h}}
+function inRect(x,y,r,q){return x+r>q.x&&x-r<q.x+q.w&&y+r>q.y&&y-r<q.y+q.h}
+function inRects(x,y,r,list){if(!list)return false;for(const q of list)if(inRect(x,y,r,q))return true;return false}
+function terrainBlock(x,y,r){const t=MAP&&MAP.terrain;if(!t)return false;
+ if(t.water&&inRects(x,y,r*.7,t.water)&&!inRects(x,y,r*.7,t.bridges))return true;
+ if(t.cliffs&&inRects(x,y,r*.7,t.cliffs))return true;
+ if(t.walk){const pad=t.clear||(HOME.r+1.8);if(Math.hypot(x-HOME.x,y-HOME.y)<pad)return false;if(inRects(x,y,0,t.walk)||inRects(x,y,0,t.bridges))return false;return true}
+ return false}
+// 十字路
+function plusTerr(hx,hy,w,h,c){return{paths:[R(hx-1,0,2,h),R(0,hy-1,w,2)],clear:c||3.2}}
+// 核心一圈：11..23 的方环（第一关/瓮城内圈）
 function coreRing(){return[
  mkGate('wN',17,11,0),mkGate('wS',17,23,0),mkGate('wW',11,17,1),mkGate('wE',23,17,1),
  mkCorner('wNW',11,11,1,1),mkCorner('wNE',23,11,-1,1),mkCorner('wSW',11,23,1,-1),mkCorner('wSE',23,23,-1,-1)
@@ -45,26 +56,118 @@ function coreBuildings(){return[
  {id:'bC',t:'cats',x:19.6,y:13.6},{id:'bD',t:'ducks',x:14.4,y:20.4},
  {id:'f1',t:'farm',x:13.6,y:15},{id:'f2',t:'farm',x:20.4,y:19},{id:'f3',t:'farm',x:8,y:26},{id:'f4',t:'farm',x:26,y:8}
 ]}
+// 任意方环，off 可把四边城门错开（双层花园外圈用）
+function coreRingAt(x1,y1,x2,y2,p,off){off=off||{};p=p||'';
+ const mx=(x1+x2)/2,my=(y1+y2)/2,sx=x2-x1,sy=y2-y1,mid=Math.min(4.4,sx*.42,sy*.42),h=mid/2,ov=.28;
+ const nX=mx+(off.n||0),sX=mx+(off.s||0),wY=my+(off.w||0),eY=my+(off.e||0);
+ return[
+  mkWall(p+'wN',nX,y1,mid,0,GATE_W),mkWall(p+'wS',sX,y2,mid,0,GATE_W),mkWall(p+'wW',x1,wY,mid,1,GATE_W),mkWall(p+'wE',x2,eY,mid,1,GATE_W),
+  mkCornerArms(p+'wNW',x1,y1,nX-h-x1+ov,wY-h-y1+ov,1,1),mkCornerArms(p+'wNE',x2,y1,x2-(nX+h)+ov,eY-h-y1+ov,-1,1),
+  mkCornerArms(p+'wSW',x1,y2,sX-h-x1+ov,y2-(wY+h)+ov,1,-1),mkCornerArms(p+'wSE',x2,y2,x2-(sX+h)+ov,y2-(eY+h)+ov,-1,-1)
+ ]}
+// 菜园小围栏：四边墙，朝家的那一边是门
+function farmPen(pre,fx,fy,hx,hy,s){s=s==null?2.55:s;const x1=fx-s,y1=fy-s,x2=fx+s,y2=fy+s,mx=(x1+x2)/2,my=(y1+y2)/2;
+ const side=Math.abs(hx-fx)>Math.abs(hy-fy)?(hx>fx?'E':'W'):(hy>fy?'S':'N');
+ return[
+  mkWall(pre+'N',mx,y1,x2-x1,0,side==='N'?GATE_W:0),mkWall(pre+'S',mx,y2,x2-x1,0,side==='S'?GATE_W:0),
+  mkWall(pre+'W',x1,my,y2-y1,1,side==='W'?GATE_W:0),mkWall(pre+'E',x2,my,y2-y1,1,side==='E'?GATE_W:0),
+  {id:pre+'f',t:'farm',x:fx,y:fy}
+ ]}
+const ND_STD=[['S'],['S','E'],['S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W']];
+const ND_BRIDGE=[['S'],['S'],['S','E'],['S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W']];
+const ND_FIELDS=[['S','E'],['S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W']];
+const ND_SOUTH=[['S'],['S'],['S'],['S'],['S'],['S'],['S']];
 const MAPS={
  yard:{id:'yard',name:'胖宝的院子',ic:'🏡',desc:'围墙能连成一圈，四边路上各有一座城门',
-  unlock:null,w:34,h:34,gold:15,nights:7,home:{x:17,y:17,r:1.4},spots:[...coreRing(),...coreBuildings()]},
+  w:34,h:34,gold:15,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1,ehp:1,edmg:1},nightsDir:ND_STD,
+  terrain:plusTerr(17,17,34,34),spots:[...coreRing(),...coreBuildings()]},
  barbican:{id:'barbican',name:'瓮城',ic:'🏯',desc:'南门外加一圈瓮城，大门错开；西南菜园单独围起来',
-  unlock:'win',w:34,h:34,gold:18,nights:7,home:{x:17,y:17,r:1.4},spots:[
+  w:34,h:34,gold:22,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.06,ehp:1.02,edmg:1.03},nightsDir:ND_STD,
+  terrain:plusTerr(17,17,34,34),spots:[
    ...coreRing(),...coreBuildings(),
-   // 南瓮城：外墙在 y=28.5，门开在东侧，不对准南路
    mkWall('wBW',11,25.85,5.7,1,0),mkWall('wBE',23,25.85,5.7,1,0),
    mkWall('wBSW',14.8,28.5,7.6,0,0),mkWall('wBSE',20.7,28.5,4.6,0,GATE_W),
-   // 西南菜园小围栏，东门朝家
    mkWall('pN',8.15,23.5,5.3,0,0),mkWall('pW',5.5,26.05,5.1,1,0),mkWall('pS',8.15,28.6,5.3,0,0),mkWall('pE',10.8,26.05,5.1,1,GATE_W)
+  ]},
+ garden:{id:'garden',name:'里外花园',ic:'🌸',desc:'里外两圈围墙，外门和内门错开，中间可以建塔',
+  w:34,h:34,gold:26,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.10,ehp:1.04,edmg:1.05},nightsDir:ND_STD,
+  terrain:plusTerr(17,17,34,34),spots:[
+   ...coreRingAt(12.2,12.2,21.8,21.8,'i'),
+   ...coreRingAt(6.4,6.4,27.6,27.6,'o',{n:-3,s:3,w:-3,e:3}),
+   {id:'t1',t:'tower',x:9.2,y:17},{id:'t2',t:'tower',x:24.8,y:17},{id:'t3',t:'tower',x:17,y:9.2},{id:'t4',t:'tower',x:17,y:24.8},
+   {id:'bC',t:'cats',x:15.2,y:15.2},{id:'bD',t:'ducks',x:18.8,y:18.8},
+   {id:'f1',t:'farm',x:9.3,y:9.3},{id:'f2',t:'farm',x:24.7,y:24.7},{id:'f3',t:'farm',x:24.7,y:9.3},{id:'f4',t:'farm',x:9.3,y:24.7}
+  ]},
+ bridge:{id:'bridge',name:'小石桥',ic:'🌉',desc:'一条小河隔在南边，三座石桥是必经之路，桥上可以建门',
+  w:34,h:34,gold:23,nights:7,home:{x:17,y:11.5,r:1.4},diff:{count:1.14,ehp:1.06,edmg:1.06},nightsDir:ND_BRIDGE,
+  terrain:{clear:3.0,water:[R(0,19.2,34,3.6)],
+   bridges:[R(7,18.7,2.6,4.6),R(15.7,18.7,2.6,4.6),R(24.4,18.7,2.6,4.6)],
+   paths:[R(16,0,2,19.2),R(16,22.8,2,11.2),R(0,10.5,34,2),R(0,25.8,34,2),R(7,18.7,2.6,4.6),R(15.7,18.7,2.6,4.6),R(24.4,18.7,2.6,4.6)]},
+  spots:[
+   ...coreRingAt(11,5.6,23,17, ''),
+   mkWall('gW',8.3,21,3.2,0,GATE_W),mkWall('gM',17,21,3.2,0,GATE_W),mkWall('gE',25.7,21,3.2,0,GATE_W),
+   {id:'t1',t:'tower',x:8.3,y:18.0},{id:'t2',t:'tower',x:17,y:18.0},{id:'t3',t:'tower',x:25.7,y:18.0},{id:'t4',t:'tower',x:20.2,y:13.2},
+   {id:'bC',t:'cats',x:13.6,y:13.4},{id:'bD',t:'ducks',x:20.6,y:8.6},
+   {id:'f1',t:'farm',x:13.8,y:8.4},{id:'f2',t:'farm',x:17,y:26.6},{id:'f3',t:'farm',x:8.3,y:26.6}
+  ]},
+ fields:{id:'fields',name:'四面花田',ic:'🌼',desc:'四个角落的菜园各自围起来，敌人会从四面早点过来',
+  w:34,h:34,gold:22,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.22,ehp:1.12,edmg:1.1},nightsDir:ND_FIELDS,
+  terrain:plusTerr(17,17,34,34),spots:[
+   ...coreRing(),
+   ...farmPen('pA',7.2,7.2,17,17),...farmPen('pB',26.8,7.2,17,17),...farmPen('pC',7.2,26.8,17,17),...farmPen('pD',26.8,26.8,17,17),
+   {id:'t1',t:'tower',x:15,y:13},{id:'t2',t:'tower',x:19,y:21},{id:'t3',t:'tower',x:13,y:19},{id:'t4',t:'tower',x:21,y:15},
+   {id:'bC',t:'cats',x:19.6,y:13.6},{id:'bD',t:'ducks',x:14.4,y:20.4}
+  ]},
+ mountain:{id:'mountain',name:'盘山公路',ic:'⛰️',desc:'悬崖盘道，胖宝住在山顶。沿路有好几道关卡，要一层一层守',
+  w:34,h:36,gold:24,nights:7,home:{x:17,y:5.0,r:1.4},diff:{count:1.38,ehp:1.4,edmg:1.2,spd:1.42},nightsDir:ND_SOUTH,
+  terrain:{clear:2.6,
+   walk:[
+    R(11,2.2,12,7.3),            // 山顶平台
+    R(15.7,9.0,2.6,4.2),         // 出山顶门向南
+    R(15.7,11.6,7.6,2.8),        // 转向东
+    R(20.7,12.8,2.6,5.6),        // 东侧下行
+    R(10.8,16.2,12.5,2.8),       // 向西横走
+    R(10.8,17.4,2.6,6.0),        // 西侧下行
+    R(10.8,21.2,12.5,2.8),       // 向东横走
+    R(20.7,22.4,2.6,6.0),        // 东侧再下行
+    R(15.7,26.2,7.6,2.8),        // 回到中间
+    R(15.7,27.4,2.6,9.6),        // 山脚下南路
+    // 关卡旁的小台地（建塔）
+    R(12.6,29.6,3.2,2.8),R(18.4,29.6,3.2,2.8),
+    R(13.6,19.8,3.0,2.2),R(17.8,19.8,3.0,2.2),
+    R(13.6,14.8,3.0,2.2),R(17.8,14.8,3.0,2.2),
+    R(14.6,9.6,5.0,2.0)
+   ],
+   paths:[
+    R(15.85,9.0,2.3,4.2),R(15.85,11.8,7.2,2.4),R(20.85,12.8,2.3,5.6),
+    R(11.0,16.4,12.1,2.4),R(10.95,17.4,2.3,6.0),R(11.0,21.4,12.1,2.4),
+    R(20.85,22.4,2.3,6.0),R(15.85,26.4,7.2,2.4),R(15.85,27.4,2.3,9.6)
+   ]},
+  spots:[
+   mkWall('cp1',17,31.0,9.0,0,GATE_W),
+   mkWall('cp2',17,21.9,5.0,1,GATE_W),
+   mkWall('cp3',17,16.9,5.0,1,GATE_W),
+   mkWall('cp4',17,9.2,5.2,0,GATE_W),
+   {id:'t1',t:'tower',x:13.8,y:30.8},{id:'t1b',t:'tower',x:20.2,y:30.8},
+   {id:'t2',t:'tower',x:15.0,y:20.6},{id:'t2b',t:'tower',x:19.2,y:20.6},
+   {id:'t3',t:'tower',x:15.0,y:15.6},{id:'t3b',t:'tower',x:19.2,y:15.6},
+   {id:'t4',t:'tower',x:14.2,y:7.2},{id:'t4b',t:'tower',x:19.8,y:7.2},
+   {id:'bC',t:'cats',x:13.4,y:4.4},{id:'bD',t:'ducks',x:20.6,y:4.4},
+   {id:'f1',t:'farm',x:13.2,y:6.6},{id:'f2',t:'farm',x:20.8,y:6.6}
   ]}
 };
+const MAP_ORDER=['yard','barbican','garden','bridge','fields','mountain'];
 let MAP=null,MAP_W=34,MAP_H=34,HOME={x:17,y:17,r:1.4},SPOTS=[],NIGHTS=7,DIRS={};
 function refreshDirs(){DIRS={N:{x:HOME.x,y:-.5,cn:'北'},S:{x:HOME.x,y:MAP_H+.5,cn:'南'},W:{x:-.5,y:HOME.y,cn:'西'},E:{x:MAP_W+.5,y:HOME.y,cn:'东'}}}
 function useMap(id){MAP=MAPS[id]||MAPS.yard;MAP_W=MAP.w;MAP_H=MAP.h;HOME=MAP.home;SPOTS=MAP.spots;NIGHTS=MAP.nights||7;refreshDirs();return MAP}
 useMap('yard');
-function nightDirs(n){return[['S'],['S','E'],['S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W']][n-1]}
-// 第 n 晚的出怪表：[{t 秒, dir, k}]
+function nightDirs(n){const a=(MAP&&MAP.nightsDir)||ND_STD;return a[Math.min(n,a.length)-1]||a[a.length-1]}
 function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5;
  const add=(k,c0,t0=0,t1=dur)=>{const cnt=k==='boss'?c0:Math.round(c0*cm);for(let i=0;i<cnt;i++)out.push({t:t0+(t1-t0)*(cnt>1?i/(cnt-1):.5)+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
  add('raccoon',4+n*2);if(n>=2)add('wolf',n*2-1,4);if(n>=3)add('bear',n-2,8);if(n===NIGHTS)add('boss',1,dur*.6,dur*.6);
  return out.sort((a,b)=>a.t-b.t)}
+function normRec(r){r=r||{};r.best=r.best||0;r.wins=r.wins||0;r.maps=r.maps||{};
+ if(r.wins>0&&!(r.maps.yard&&r.maps.yard.wins)){r.maps.yard={wins:r.wins,best:r.best||0}}
+ return r}
+function mapCleared(r,id){return !!(r&&r.maps&&r.maps[id]&&r.maps[id].wins>0)}
+function mapUnlocked(r,id,all){if(all)return true;const i=MAP_ORDER.indexOf(id);return i<=0||mapCleared(r,MAP_ORDER[i-1])}
