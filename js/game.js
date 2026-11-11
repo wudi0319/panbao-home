@@ -259,7 +259,7 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  for(const d of DECOR)if(d.x>vx0&&d.x<vx1&&d.y>vy0&&d.y<vy1)L.push({y:d.y,f:()=>cachedSpr(d.k,d.x,d.y+.4,d.k==='tree'?1.5:.8)});
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv)L.push({y:s.y+(s.t==='wall'&&s.v?2.7:0),f:()=>{drawBuilding(s,b);if(ns===s){ctx.save();ctx.strokeStyle='#ff8c42';ctx.lineWidth=3;ctx.setLineDash([5,4]);ctx.beginPath();ctx.ellipse(sx(s.x),sy(s.y)+T*.2,T*.95,T*.4,0,0,7);ctx.stroke();ctx.restore()}}})}
  L.push({y:HOME.y+.6,f:()=>{spr(S.house,HOME.x,HOME.y+.8,3.4);const cry=G.home.hurtT>0||G.home.hp<G.home.max*.4,fr=(cry?'cry':G.phase==='day'?'laugh':'idle')+(Math.floor(performance.now()/450)%2),im=babyImg[fr];
-  if(im&&im.complete&&im.naturalWidth){const h=T*1.25,w=h*im.naturalWidth/im.naturalHeight;ctx.drawImage(im,sx(HOME.x)-w/2,sy(HOME.y+1.95)-h,w,h)}}});
+  if(im&&im.complete&&im.naturalWidth){const h=T*.94,w=h*im.naturalWidth/im.naturalHeight;ctx.drawImage(im,sx(HOME.x)-w/2,sy(HOME.y+1.95)-h,w,h)}}});
  for(const p of Object.values(G.players))if(!p.dead)L.push({y:p.y,f:()=>{if(p.flash){ctx.save();ctx.globalAlpha=.6}spr(S.puppy,p.x,p.y,1.3,p.dir,p.ph,p.moving,p.dog);if(p.flash)ctx.restore();drawWeapon(p)}});
  for(const u of G.units)if(!u.dead)L.push({y:u.y,f:()=>spr(critter,u.x,u.y,.75,u.k,u.dir,u.ph,u.moving,u.flash>0)});
  for(const e of G.enemies)L.push({y:e.y,f:()=>spr(critter,e.x,e.y,ENEMIES[e.k].r*2.3,e.k,e.dir,e.ph,e.moving,e.flash>0)});
