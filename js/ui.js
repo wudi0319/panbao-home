@@ -45,7 +45,7 @@ function renderPrep(){const r=Game.loadRec(),sm=MAPS[sel.map];
  markScroll($('pickBuff'));markScroll($('pickDebuff'))}
 function openPrep(){renderPrep();$('start').classList.add('hidden');$('prep').classList.remove('hidden')}
 function closePrep(){$('prep').classList.add('hidden');$('start').classList.remove('hidden');renderStart()}
-function startRun(){Game.newGame({dog:sel.dog,weapon:sel.weapon,map:sel.map,buffs:sel.buffs,debuffs:sel.debuffs});paused=false;$('pause').classList.add('hidden');$('start').classList.add('hidden');$('prep').classList.add('hidden');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('hMe').textContent=DOGS[sel.dog].ic;tut.start();SFX.play('click');measure()}
+function startRun(){Game.newGame({dog:sel.dog,weapon:sel.weapon,map:sel.map,buffs:sel.buffs,debuffs:sel.debuffs});paused=false;$('pause').classList.add('hidden');$('start').classList.add('hidden');$('prep').classList.add('hidden');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');if($('branch'))$('branch').classList.add('hidden');$('hMe').textContent=DOGS[sel.dog].ic;tut.start();SFX.play('click');measure()}
 $('pickDog').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel.dog=b.dataset.dog;renderStart()};
 $('pickWeapon').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.weapon=b.dataset.w;renderStart()};
 $('pickMap').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.map=b.dataset.map;renderStart()};
@@ -60,9 +60,9 @@ $('pickBuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;const 
 $('pickDebuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.d;
  if(b.classList.contains('lock'))return toast(condText(DEBUFFS[k].unlock)||'还没解锁哦');
  const i=sel.debuffs.indexOf(k);if(i>=0)sel.debuffs.splice(i,1);else{if(sel.debuffs.length>=DEBUFF_MAX){toast('最多选 '+DEBUFF_MAX+' 个挑战');return}sel.debuffs.push(k)}renderPrep()};
-$('againBtn').onclick=()=>{SFX.play('click');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('prep').classList.add('hidden');renderStart();$('start').classList.remove('hidden')};
+$('againBtn').onclick=()=>{SFX.play('click');$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('prep').classList.add('hidden');if($('branch'))$('branch').classList.add('hidden');renderStart();$('start').classList.remove('hidden')};
 function syncChrome(){const menu=!$('start').classList.contains('hidden')||!$('prep').classList.contains('hidden');
- const modal=menu||!$('pause').classList.contains('hidden')||!$('homeUp').classList.contains('hidden')||!$('end').classList.contains('hidden');
+ const modal=menu||!$('pause').classList.contains('hidden')||!$('homeUp').classList.contains('hidden')||!$('end').classList.contains('hidden')||!$('branch').classList.contains('hidden');
  document.body.classList.toggle('on-menu',menu);document.body.classList.toggle('on-modal',modal)}
 function markScroll(el){if(!el)return;const upd=()=>el.classList.toggle('more',el.scrollHeight>el.clientHeight+10&&el.scrollTop+el.clientHeight<el.scrollHeight-8);el.onscroll=upd;requestAnimationFrame(upd)}
 let toastT;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400)}
@@ -79,18 +79,36 @@ Game.hooks.end=(win,was,r)=>{const G=Game.G;$('endIcon').textContent=win?'🏆':
  else{$('endStars').textContent='';$('endStars').classList.add('hidden');$('endText').textContent=`在第 ${G.night+1} 夜没守住，打倒 ${G.stats.kills} 个敌人。再试一次吧！`}
  const nu=freshUnlocks(was,r);$('endUnlock').textContent=nu.length?'新解锁：'+nu.join('、'):'';setTimeout(()=>$('end').classList.remove('hidden'),600)};
 let homePick=null;
+let bottlePick=null;
 function openHomeUp(){const G=Game.G,c=Game.homeUpCost();if(c==null)return;
- homePick=Game.homeUpChoices();$('homeUpTitle').textContent='🏠 升级老家（第 '+(G.home.up+1)+' 次）';
- $('homeUpSub').textContent='花 '+c+' 金币选一个加成。每局最多 3 次，这是第 '+(G.home.up+1)+' 次';
+ homePick=Game.homeUpChoices();bottlePick=null;
+ $('homeUpTitle').textContent='🏠 升级老家（第 '+(G.home.up+1)+' 次）';
+ $('homeUpSub').textContent='花 '+c+' 金币。每局最多 3 次，这是第 '+(G.home.up+1)+' 次';
+ const opts=Game.branchOpts('home',(G.home.up||0)+1);
+ $('homeBottleLab').textContent='先给胖宝的奶瓶选一条路';
+ $('homeBottle').innerHTML=opts.map(o=>`<button data-b="${o.id}"><span class="ic">${o.ic}</span>${o.name}<small>${o.desc}</small></button>`).join('');
  $('homeUpChoices').innerHTML=homePick.map(id=>{const u=HOME_UPS[id],c=CATS[u.cat]||CATS.build;return`<button data-h="${id}"><em class="cat-tag">${c.ic} ${c.name}</em>${u.ic} ${u.name}<small>${u.desc}</small></button>`}).join('');
  $('homeUp').classList.remove('hidden');SFX.play('click')}
-function closeHomeUp(){$('homeUp').classList.add('hidden');homePick=null}
-$('homeUpChoices').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=me();if(p&&Game.upgradeHome(p.id,b.dataset.h))closeHomeUp()};
+function closeHomeUp(){$('homeUp').classList.add('hidden');homePick=null;bottlePick=null}
+$('homeBottle').onclick=e=>{const b=e.target.closest('button');if(!b)return;bottlePick=b.dataset.b;document.querySelectorAll('#homeBottle button').forEach(x=>x.classList.toggle('on',x===b));SFX.play('click')};
+$('homeUpChoices').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(!bottlePick){toast('先给奶瓶选一个路子');return}const p=me();if(p&&Game.upgradeHome(p.id,b.dataset.h,bottlePick))closeHomeUp()};
 $('homeUpCancel').onclick=()=>{SFX.play('click');closeHomeUp()};
 // ---- 按钮 ----
 const me=()=>Game.G&&Game.G.players[Game.G.me];
 const tap=(id,fn)=>$(id).addEventListener('click',e=>{e.preventDefault();fn()});
-tap('buildBtn',()=>{const p=me();if(p&&Game.build(p.id))tut.on('build')});
+let branchSid=null;
+function closeBranch(){$('branch').classList.add('hidden');branchSid=null}
+function openBranch(s){const G=Game.G,c=Game.nextCost(s);if(c==null){toast(Game.bName(s)+'已经满级啦');return}
+ if(G.gold<c){toast('金币不够，还差 '+(c-G.gold)+' 💰');return}
+ const lv=(G.b[s.id].lv||0)+1,opts=Game.branchOpts(Game.branchKind(s),lv);
+ if(!opts.length){if(Game.build(G.me,s.id))tut.on('build');return}
+ branchSid=s.id;$('branchTitle').textContent=(lv===1?'建造 ':'升级 ')+Game.bName(s)+'（'+lv+' 级）';
+ $('branchSub').textContent='花 '+c+' 金币，选一个路线';
+ $('branchChoices').innerHTML=opts.map(o=>`<button data-b="${o.id}"><span class="ic">${o.ic}</span>${o.name}<small>${o.desc}</small></button>`).join('');
+ $('branch').classList.remove('hidden');SFX.play('click')}
+$('branchChoices').onclick=e=>{const b=e.target.closest('button');if(!b||!branchSid)return;const p=me();if(p&&Game.build(p.id,branchSid,b.dataset.b)){closeBranch();tut.on('build')}};
+$('branchCancel').onclick=()=>{SFX.play('click');closeBranch()};
+tap('buildBtn',()=>{const p=me();if(!p)return;const s=Game.nearSpot(p);if(s)openBranch(s)});
 tap('razedBtn',()=>{const p=me();if(p)Game.demolish(p.id)});
 tap('homeBtn',()=>{const p=me();if(p)openHomeUp()});
 tap('nightBtn',()=>{Game.startNight();tut.on('night')});
@@ -102,7 +120,7 @@ function setPause(v){const G=Game.G;if(!G||!$('start').classList.contains('hidde
 function muteLabel(){$('muteBtn').textContent=SFX.muted?'🔇 音效：关':'🔊 音效：开';$('pauseBtn').dataset.m=SFX.muted?'1':''}
 tap('pauseBtn',()=>{SFX.play('click');setPause(!paused)});tap('resumeBtn',()=>{SFX.play('click');setPause(false)});
 tap('muteBtn',()=>{SFX.setMuted(!SFX.muted);muteLabel();SFX.play('click')});
-tap('quitBtn',()=>{setPause(false);Game.G.phase='lose';$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('prep').classList.add('hidden');renderStart();$('start').classList.remove('hidden')});
+tap('quitBtn',()=>{setPause(false);Game.G.phase='lose';$('end').classList.add('hidden');$('homeUp').classList.add('hidden');$('prep').classList.add('hidden');if($('branch'))$('branch').classList.add('hidden');renderStart();$('start').classList.remove('hidden')});
 muteLabel();
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true)});
 // ---- 摇杆：左半屏任意位置按下都能出摇杆（浮动摇杆），键盘 WASD ----
@@ -116,7 +134,7 @@ joy.addEventListener('pointerdown',e=>{e.preventDefault();joyStart(e,false)});
 $('map').addEventListener('pointerdown',e=>{const m=Game.view.mm;if(Game.G&&e.clientX>=m.x-4&&e.clientX<=m.x+m.s+4&&e.clientY>=m.y-4&&e.clientY<=m.y+m.s+4){m.big=!m.big;SFX.play('click');return}
  if(e.clientX<innerWidth*.5&&e.clientY>gview().top+10)joyStart(e,true)});
 for(const el of[joy,$('map')]){el.addEventListener('pointermove',e=>{if(e.pointerId===jid)joyMove(e)});el.addEventListener('pointerup',joyEnd);el.addEventListener('pointercancel',joyEnd)}
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='p'||k==='escape'){if(!e.repeat)setPause(!paused);return}if(paused)return;keys.add(k);if(e.repeat)return;
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='escape'&&$('branch')&&!$('branch').classList.contains('hidden')){if(!e.repeat)closeBranch();return}if(k==='escape'&&$('homeUp')&&!$('homeUp').classList.contains('hidden')){if(!e.repeat)closeHomeUp();return}if(k==='p'||k==='escape'){if(!e.repeat)setPause(!paused);return}if(paused)return;keys.add(k);if(e.repeat)return;
  if(['w','a','s','d','arrowleft','arrowright','arrowup','arrowdown'].includes(k))tut.on('move');
  if(k==='e'||k==='enter'){if(!$('buildBtn').classList.contains('hidden'))$('buildBtn').click();else if(!$('homeBtn').classList.contains('hidden'))$('homeBtn').click()}
  if(k===' '){e.preventDefault();$('skillBtn').classList.contains('hidden')||$('skillBtn').click()}
@@ -165,7 +183,7 @@ function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day',
 // ---- 主循环 ----
 let last=performance.now(),fpsN=0,fpsT=0;const showFps=/fps/.test(location.search);
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const G=Game.G;
- const blocked=paused||!$('homeUp').classList.contains('hidden')||!$('prep').classList.contains('hidden')||!$('start').classList.contains('hidden');
+ const blocked=paused||!$('homeUp').classList.contains('hidden')||!$('prep').classList.contains('hidden')||!$('start').classList.contains('hidden')||!$('branch').classList.contains('hidden');
  if(G&&!blocked&&G.phase!=='win'&&G.phase!=='lose'){G.input[G.me]=readInput();Game.step(dt)}else if(G)G.input[G.me]={x:0,y:0}
  syncChrome();Game.render();hud();if(showFps){fpsN++;fpsT+=dt;if(fpsT>1){$('hint').textContent+=' · '+fpsN+'fps';fpsN=0;fpsT=0}}requestAnimationFrame(frame)}
 renderStart();syncChrome();measure();requestAnimationFrame(frame);

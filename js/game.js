@@ -15,27 +15,33 @@ function newGame(o){useMap(o.map||'yard');rebuildDecor();
   home:{hp:300*mods.stone,max:300*mods.stone,cd:0,hurtT:0,up:0,picks:[],bdmg:5,bcd:1.2,brange:3.8,regen:0,stipend:0,aura:1,beds:0,cozy:0,guard:0},
   players:{},me:o.dog,b:{},enemies:[],units:[],shots:[],fx:[],floats:[],coins:[],
   input:{},army:{mode:'camp',leader:null,x:0,y:0},dark:0,shake:0,stats:{kills:0,broke:0,stars:0,starGain:0}};
- for(const s of SPOTS)G.b[s.id]={lv:0,hp:0,max:0,cd:0,dead:0};
+ G.home.bpicks=[];for(const s of SPOTS)G.b[s.id]={lv:0,hp:0,max:0,cd:0,dead:0,picks:[]};
  view.mm.big=false;view.guide=null;addPlayer(o.dog,o.dog,o.weapon);navDirty=1;rebuildNav();cam.x=HOME.x;cam.y=HOME.y;return G}
 function addPlayer(id,dog,weapon){const max=100*G.mods.hp;let x=HOME.x,y=HOME.y+2.2;
  if(terrainBlock(x,y,.3)){for(let d=.2;d<5&&terrainBlock(x,y,.3);d+=.2)for(let a=0;a<16;a++){const nx=HOME.x+Math.cos(a*Math.PI/8)*d,ny=HOME.y+Math.sin(a*Math.PI/8)*d;if(nx>.5&&ny>.5&&nx<MAP_W-.5&&ny<MAP_H-.5&&!terrainBlock(nx,ny,.3)){x=nx;y=ny;break}}}
  G.players[id]={id,dog,weapon,x,y,dir:0,hp:max,max,cd:0,skillCd:0,dead:0,respawn:0,ph:0,moving:false,swing:0,face:{x:0,y:1}};G.input[id]={x:0,y:0}}
 const spotOf=id=>SPOTS.find(s=>s.id===id);
 const bStat=(s,k,lv)=>BUILD[s.t][k][lv-1];
-function bMax(s,lv){let h=bStat(s,'hp',lv);if(s.t==='wall')h*=G.mods.stone;else h*=(G.mods.bhp||1);return h}
+function bMax(s,lv){let h=bStat(s,'hp',lv);const b=G.b[s.id];if(s.t==='wall'){h*=G.mods.stone;if(hasPick(b,'ironwall'))h*=1.3;if(hasPick(b,'reinforce'))h*=1.35;if(hasPick(b,'fort'))h*=1.4}else h*=(G.mods.bhp||1);return h}
 function priceOf(c){return Math.max(1,Math.round(c*(G.mods&&G.mods.bcost||1)))}
 function nextCost(s){const b=G.b[s.id];if(b.lv>=3)return null;let c=BUILD[s.t].cost[b.lv];if(s.t==='wall'&&G.mods.wcut)c=Math.max(2,c-G.mods.wcut);return priceOf(c)}
 function nearSpot(p){let best=null,bd=1.7;for(const s of SPOTS){const d=s.t==='wall'?Math.max(0,bDist(s,p.x,p.y)+WALL_HT+.15):Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}return best}
-function build(pid,sid){if(G.phase!=='day')return false;const p=G.players[pid],s=spotOf(sid)||nearSpot(p);if(!s)return false;
+function autoBranch(s,lv){const kind=branchKind(s),opts=branchOpts(kind,lv);if(!opts.length)return null;
+ const plan=G.branchPlan,want=plan&&(plan[s.id]||plan[s.t]||plan[kind]);
+ const id=Array.isArray(want)?want[lv-1]:null;if(id&&opts.some(o=>o.id===id))return id;return opts[0].id}
+function build(pid,sid,pickId){if(G.phase!=='day')return false;const p=G.players[pid],s=spotOf(sid)||nearSpot(p);if(!s)return false;
  const b=G.b[s.id],c=nextCost(s);if(c==null){hooks.toast(bName(s)+'已经满级啦');return false}
  if(G.gold<c){hooks.toast('金币不够，还差 '+(c-G.gold)+' 💰');sfx('poor');return false}
- G.gold-=c;b.lv++;b.max=bMax(s,b.lv);b.hp=b.max;b.dead=0;
- G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');hooks.toast((b.lv===1?'建好了 ':'升级到 '+b.lv+' 级 ')+bName(s)+'！'+(upgradeHint(s,b.lv)?' '+upgradeHint(s,b.lv):''));
+ const lv=(b.lv||0)+1,kind=branchKind(s),opts=branchOpts(kind,lv);
+ const pick=pickId||autoBranch(s,lv);if(opts.length&&!opts.some(o=>o.id===pick)){hooks.toast('先选一个升级路线');return false}
+ G.gold-=c;b.picks=b.picks||[];if(pick)b.picks.push(pick);b.lv++;b.max=bMax(s,b.lv);b.hp=b.max;b.dead=0;
+ const br=pick&&branchById(kind,pick);G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');
+ hooks.toast((b.lv===1?'建好了 ':'升级到 '+b.lv+' 级 ')+bName(s)+'！'+(br?' '+br.ic+br.name:'')+(upgradeHint(s,b.lv)?'':' '));
  navDirty=1;for(const q of Object.values(G.players))if(!q.dead)pushOut(q,.3);for(const u of G.units)if(!u.dead)pushOut(u,.28);syncUnits();return true}
 function paidFor(s){const b=G.b[s.id];if(!b||!b.lv)return 0;let n=0;for(let i=0;i<b.lv;i++){let c=BUILD[s.t].cost[i];if(s.t==='wall'&&G.mods.wcut)c=Math.max(2,c-G.mods.wcut);n+=c}return n}
 function demolishValue(s){return Math.max(1,Math.floor(paidFor(s)*(G.mods.refund||0)))}
 function demolish(pid,sid){if(G.phase!=='day')return false;const p=G.players[pid],s=spotOf(sid)||nearSpot(p);if(!p||!s||p.dead)return false;const b=G.b[s.id];if(!b||!b.lv)return false;if(!(G.mods.refund>0)){hooks.toast('还不会拆了回收呢');return false}
- const back=demolishValue(s);b.lv=0;b.hp=0;b.max=0;b.dead=0;G.gold+=back;
+ const back=demolishValue(s);b.lv=0;b.hp=0;b.max=0;b.dead=0;b.picks=[];G.gold+=back;
  if(s.t==='cats'||s.t==='ducks')G.units=G.units.filter(u=>u.home!==s.id);navDirty=1;G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');hooks.toast('拆除了 '+bName(s)+'，退回 '+back+' 💰');return true}
 function nearHome(p){return Math.hypot(p.x-HOME.x,p.y-HOME.y)<HOME.r+1.9}
 function homeUpCost(){return G.home.up>=3?null:priceOf(HOME_UP_COST[G.home.up])}
@@ -63,16 +69,27 @@ function applyHomeUp(id){const U=HOME_UPS[id];if(!U||!G)return false;
  else if(id==='stretch')G.mods.prange=(G.mods.prange||1)*1.2
  else if(id==='pelt'){G.mods.pet=(G.mods.pet||1)*1.3;syncUnits();for(const u of G.units)if(!u.dead)u.hp=Math.min(u.max,u.hp*1.3)}
  G.home.picks.push(id);G.home.up++;G.fx.push({k:'puff',x:HOME.x,y:HOME.y,t:0,life:.6});sfx('build');hooks.toast('🏠 '+U.ic+' '+U.name+'！');return true}
-function upgradeHome(pid,id){if(G.phase!=='day')return false;const p=G.players[pid];if(!p||p.dead||!nearHome(p))return false;
+function applyHomeBottle(id){const o=branchById('home',id);if(!o||!G)return false;
+ const bp=G.home.bpicks||[];if(bp.includes(id))return false;
+ if(id==='quick')G.home.bcd=Math.max(.45,(G.home.bcd||1.2)*0.75);
+ if(id==='longarm')G.home.brange=(G.home.brange||3.8)*1.3;
+ if(id==='rich')G.home.bdmg=(G.home.bdmg||5)*1.4;
+ G.home.bpicks=bp.concat([id]);return true}
+function upgradeHome(pid,id,bottleId){if(G.phase!=='day')return false;const p=G.players[pid];if(!p||p.dead||!nearHome(p))return false;
  const c=homeUpCost();if(c==null){hooks.toast('老家这局已经升满啦');return false}
  if(G.gold<c){hooks.toast('金币不够，还差 '+(c-G.gold)+' 💰');sfx('poor');return false}
  if(!HOME_UPS[id]||(G.home.picks||[]).includes(id))return false;
- G.gold-=c;return applyHomeUp(id)}
+ const lv=(G.home.up||0)+1,opts=branchOpts('home',lv),pick=bottleId||autoHomeBottle(lv);
+ if(opts.length&&!opts.some(o=>o.id===pick)){hooks.toast('先给奶瓶选一个路子');return false}
+ G.gold-=c;if(pick)applyHomeBottle(pick);return applyHomeUp(id)}
+function autoHomeBottle(lv){const opts=branchOpts('home',lv);if(!opts.length)return null;
+ const want=G.branchPlan&&G.branchPlan.home;const id=Array.isArray(want)?want[lv-1]:null;
+ if(id&&opts.some(o=>o.id===id))return id;return opts[0].id}
 function startNight(){if(G.phase!=='day')return;G.phase='night';G.nightT=0;G.spawnQ=waveFor(G.night+1,G.mods.count);sfx('night');
  hooks.toast('🌙 第 '+(G.night+1)+' 夜，敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来了！')}
 function morning(){G.night++;G.phase='day';G.coins=[];
  if(G.night>=NIGHTS){G.phase='win';endGame(true);return}
- let pay=4+(G.home.stipend||0);for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)+(G.mods.farmPlus||0)
+ let pay=4+(G.home.stipend||0);for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)+(G.mods.farmPlus||0)+(hasPick(b,'harvest')?2:0)+(hasPick(b,'soil')?3:0)+(hasPick(b,'silo')?4:0)
   else if(G.mods.payroll&&(s.t==='tower'||s.t==='cats'||s.t==='ducks')&&b.lv&&!b.dead)pay+=G.mods.payroll}
  pay=Math.round(pay*G.mods.gold);const interest=G.mods.interest?Math.min(G.mods.interestCap||7,Math.floor(G.gold*G.mods.interest)):0;G.gold+=pay+interest;
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}navDirty=1;
@@ -85,10 +102,13 @@ function endGame(win){sfx(win?'win':'lose');const r=normRec(loadRec());const was
  if(win){r.maps[mid].wins++;const got=rateStars(G),prev=r.maps[mid].stars||0;r.maps[mid].stars=Math.max(prev,got);G.stats.stars=got;G.stats.starGain=Math.max(0,r.maps[mid].stars-prev)}
  saveRec(r);hooks.end(win,was,r)}
 // ---- 小动物士兵 ----
-function syncUnits(){for(const s of SPOTS){if(s.t!=='cats'&&s.t!=='ducks')continue;const b=G.b[s.id];if(!b.lv)continue;const n=bStat(s,'n',b.lv),U=UNITS[BUILD[s.t].unit];
- const n2=n+(G.mods.beds||0)+(G.home.beds||0),mine=G.units.filter(u=>u.home===s.id);
- for(let i=mine.length;i<n2;i++){const max=U.hp*G.mods.pet*(1+.25*(b.lv-1));G.units.push({id:uid++,home:s.id,k:BUILD[s.t].unit,slot:i,x:s.x,y:s.y+.8,hp:max,max,cd:0,dead:0,respawn:0,dir:0,ph:0,moving:false})}
- for(const u of mine){u.max=U.hp*G.mods.pet*(1+.25*(b.lv-1))}}}
+function campN(s,b){return bStat(s,'n',b.lv)+(hasPick(b,'horde')?1:0)+(hasPick(b,'recruit')?1:0)+(G.mods.beds||0)+(G.home.beds||0)}
+function campHpMul(b){return (hasPick(b,'elite')?1.3:1)*(hasPick(b,'iron')?1.35:1)}
+function campDmgMul(b){return (hasPick(b,'elite')?1.25:1)*(hasPick(b,'fierce')?1.25:1)}
+function syncUnits(){for(const s of SPOTS){if(s.t!=='cats'&&s.t!=='ducks')continue;const b=G.b[s.id];if(!b.lv)continue;const n2=campN(s,b),U=UNITS[BUILD[s.t].unit],hm=campHpMul(b);
+ const mine=G.units.filter(u=>u.home===s.id);
+ for(let i=mine.length;i<n2;i++){const max=U.hp*G.mods.pet*(1+.25*(b.lv-1))*hm;G.units.push({id:uid++,home:s.id,k:BUILD[s.t].unit,slot:i,x:s.x,y:s.y+.8,hp:max,max,cd:0,dead:0,respawn:0,dir:0,ph:0,moving:false})}
+ for(const u of G.units.filter(u=>u.home===s.id)){const nm=U.hp*G.mods.pet*(1+.25*(b.lv-1))*hm;if(nm>u.max)u.hp+=nm-u.max;u.max=nm}}}
 // 小兵指令：follow 跟随玩家；deploy 原地部署（插旗守这里）；camp 默认守在各自兵营
 function armyFollow(pid){if(!G.units.length){hooks.toast('先建小猫营或小鸭营吧');return}G.army.mode='follow';G.army.leader=pid;sfx('click');hooks.toast('🐾 小动物们跟着'+DOGS[G.players[pid].dog].name+'走！')}
 function armyDeploy(pid){if(!G.units.length){hooks.toast('先建小猫营或小鸭营吧');return}const p=G.players[pid];G.army.mode='deploy';G.army.leader=null;G.army.x=p.x;G.army.y=p.y;sfx('click');hooks.toast('🚩 小动物们守在这里！')}
@@ -97,7 +117,15 @@ function toggleArmy(pid){G.army.mode==='follow'?armyDeploy(pid):armyFollow(pid)}
 function hurtEnemy(e,d,stun,byP){if(e.dead)return;e.hp-=d;e.flash=.12;if(stun)e.stun=Math.max(e.stun||0,stun);
  if(byP===1){sfx('hit');const me=G.players[G.me];if(me)me.combat=G.t;if(G.floats.length<70)G.floats.push({x:e.x+(Math.random()-.5)*.4,y:e.y-ENEMIES[e.k].r*2-.3,txt:''+Math.round(d),t:.25,col:'#fff',sm:1})}
  if(byP==='u'&&G.mods.slow)e.slowT=Math.max(e.slowT||0,1.2);
- if(e.hp<=0){e.dead=1;let g=Math.round(ENEMIES[e.k].gold*G.mods.drop)+(G.mods.luck||0);if(G.mods.bounty&&(e.k==='bear'||e.k==='boss'))g+=Math.round(ENEMIES[e.k].gold*(G.mods.drop||1)*G.mods.bounty);G.gold+=g;G.stats.kills++;sfx('kill');G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.coins.push({x:e.x,y:e.y-.4,t:0,n:g});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
+ if(e.hp<=0){e.dead=1;let g=Math.round(ENEMIES[e.k].gold*G.mods.drop)+(G.mods.luck||0);if(G.mods.bounty&&(e.k==='bear'||e.k==='boss'))g+=Math.round(ENEMIES[e.k].gold*(G.mods.drop||1)*G.mods.bounty);g+=farmBountyGold(e);G.gold+=g;G.stats.kills++;sfx('kill');G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.coins.push({x:e.x,y:e.y-.4,t:0,n:g});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
+function farmBountyGold(e){let n=0;for(const s of SPOTS){if(s.t!=='farm')continue;const b=G.b[s.id];if(!b||!b.lv||b.dead)continue;
+  const add=(hasPick(b,'bounty')?1:0)+(hasPick(b,'scavenge')?1:0)+(hasPick(b,'fortune')?1:0);if(!add)continue;
+  if(Math.hypot(e.x-s.x,e.y-s.y)<=(hasPick(b,'scavenge')?9:7))n+=add}return n}
+function applySlow(e,t){if(e&&t)e.slowT=Math.max(e.slowT||0,t)}
+function impactShot(s,primary){if(primary&&!primary.dead){hurtEnemy(primary,s.dmg,0,s.byP);applySlow(primary,s.slow)}
+ if(s.splash){for(const e of enemiesNear(s.x,s.y,s.splash)){if(primary&&e.id===primary.id)continue;hurtEnemy(e,s.dmg*(s.splashMul||.6),0,s.byP);applySlow(e,s.slow)}G.fx.push({k:'quake',x:s.x,y:s.y,t:0,life:.28,r:s.splash})}
+ if(s.pierce&&primary){const nxt=enemiesNear(primary.x,primary.y,2.4).find(e=>!primary||e.id!==primary.id);if(nxt){hurtEnemy(nxt,s.dmg*.7,0,s.byP);applySlow(nxt,s.slow)}}}
+function nearestEnemies(x,y,r,n){return G.enemies.filter(e=>!e.dead&&Math.hypot(e.x-x,e.y-y)<=r+ENEMIES[e.k].r).sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y)).slice(0,n||1)}
 function enemiesNear(x,y,r){return G.enemies.filter(e=>!e.dead&&Math.hypot(e.x-x,e.y-y)<=r+ENEMIES[e.k].r)}
 function nearestEnemy(x,y,r){let best=null,bd=1e9;for(const e of G.enemies){if(e.dead)continue;const d=Math.hypot(e.x-x,e.y-y)-ENEMIES[e.k].r;if(d<=r&&d<bd){bd=d;best=e}}return best}
 function shoot(from,tgt,dmg,kind,spd=10,byP){G.shots.push({x:from.x,y:from.y-.5,tgt,tx:tgt.x,ty:tgt.y,dmg,kind,spd,t:0,byP})}
@@ -158,28 +186,29 @@ function astar(x0,y0,x1,y1,friend){if(navDirty||!navFriend)rebuildNav();const bl
    const i=idx(nx,ny),nc=cost[ci]+c;if(nc<cost[i]){cost[i]=nc;came[i]=ci;open.push((nx<<16)|ny)}}}
  if(found<0)return null;const path=[];let i=found;while(i>=0&&path.length<240){path.push({x:(i%navW)*CELL,y:Math.floor(i/navW)*CELL});i=came[i]}path.reverse();return path}
 function unitRespawn(sid){const s=spotOf(sid),b=s&&G.b[s.id],lv=(b&&b.lv)||1,base=((s&&BUILD[s.t]||{}).rev||[20,16,12])[lv-1]||20;
- return Math.max(8,base*(G.mods.rev||1)*(1-(G.home.rev||0)))}
+ return Math.max(6,base*(G.mods.rev||1)*(1-(G.home.rev||0))*(hasPick(b,'horde')?0.8:1)*(hasPick(b,'rally')?0.7:1))}
 function flashHit(tg,x,y,slam){if(tg.kind==='home'){G.home.hurtT=1}else if(tg.kind==='b'){const b=G.b[tg.s.id];if(b)b.flash=.22}else if(tg.o)tg.o.flash=.18;
  G.fx.push({k:slam?'slam':'slash',x,y,t:0,life:slam?.38:.2,r:slam?1.25:.55,a:0})}
 function dealTo(tg,d,src){if(!liveTg(tg))return;const x=(src&&src.x)||0,y=(src&&src.y)||0;
  if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1;flashHit(tg,x,y,0);sfx('home')}
- else if(tg.kind==='b'){const b=G.b[tg.s.id];if(!b||b.dead)return;if(tg.s.t==='wall'){const lv=b.lv||1,ar=(BUILD.wall.armor||[])[lv-1]||0;d*=1-ar}b.hp-=d;b.flash=.2;flashHit(tg,x,y,0);
+ else if(tg.kind==='b'){const b=G.b[tg.s.id];if(!b||b.dead)return;if(tg.s.t==='wall'){const lv=b.lv||1,ar=((BUILD.wall.armor||[])[lv-1]||0)+(hasPick(b,'fort')?0.08:0);d*=1-ar}b.hp-=d;b.flash=.2;flashHit(tg,x,y,0);if(tg.s.t==='wall'&&src&&src.byE)reflectWall(b,src.byE,d);
   if(b.hp<=0){b.hp=0;b.dead=1;navDirty=1;G.stats.broke=(G.stats.broke||0)+1;hooks.toast(bName(tg.s)+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
  else{const o=tg.o;o.hp-=d;o.flash=.18;if(tg.kind==='p'){sfx('hurt');o.combat=G.t}if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?8:unitRespawn(o.home);if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 8 秒后回家复活')}}}
 function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'||tg.kind==='b')d*=(G.mods.esmash||1);if(tg.kind==='p')d*=(G.mods.phurt||1);if(tg.kind==='u'&&G.home.guard&&tg.o&&Math.hypot(tg.o.x-HOME.x,tg.o.y-HOME.y)<4.6)d*=1-G.home.guard;
- if(tg.kind==='b'&&tg.s&&tg.s.t==='wall'){const lv=(G.b[tg.s.id]||{}).lv||1,ar=(BUILD.wall.armor||[])[lv-1]||0;d*=1-ar}
+ if(tg.kind==='b'&&tg.s&&tg.s.t==='wall'){const b=G.b[tg.s.id]||{},lv=b.lv||1,ar=((BUILD.wall.armor||[])[lv-1]||0)+(hasPick(b,'fort')?0.08:0);d*=1-ar}
  const hx=tg.kind==='b'?tg.s.x:tg.kind==='home'?HOME.x:(tg.o&&tg.o.x)||e.x,hy=tg.kind==='b'?tg.s.y:tg.kind==='home'?HOME.y:(tg.o&&tg.o.y)||e.y;
  flashHit(tg,(hx+e.x)/2,(hy+e.y)/2,ENEMIES[e.k]&&ENEMIES[e.k].smash);
  if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1;G.shake=Math.max(G.shake,.15);sfx('home')}
- else if(tg.kind==='b'){const b=G.b[tg.s.id];b.hp-=d;if(b.hp<=0){b.hp=0;b.dead=1;navDirty=1;G.stats.broke=(G.stats.broke||0)+1;hooks.toast(bName(tg.s)+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
+ else if(tg.kind==='b'){const b=G.b[tg.s.id];b.hp-=d;if(tg.s.t==='wall')reflectWall(b,e,d);if(b.hp<=0){b.hp=0;b.dead=1;navDirty=1;G.stats.broke=(G.stats.broke||0)+1;hooks.toast(bName(tg.s)+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
  else{const o=tg.o;o.hp-=d;o.flash=.18;if(tg.kind==='p'){sfx('hurt');o.combat=G.t}if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?8:unitRespawn(o.home);if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 8 秒后回家复活')}}}
+function reflectWall(b,e,d){if(!e||e.dead||!d)return;const r=(hasPick(b,'thorns')?0.2:0)+(hasPick(b,'spikes')?0.2:0)+(hasPick(b,'lash')?0.2:0);if(!r)return;hurtEnemy(e,d*r,hasPick(b,'lash')?0.35:0,0);if(hasPick(b,'lash'))applySlow(e,0.9)}
 function aimOf(tg,e){if(!tg)return{x:e.x,y:e.y,r:0};if(tg.kind==='p'||tg.kind==='u')return{x:tg.o.x,y:tg.o.y,r:.3};if(tg.kind==='b'){const q=bNear(tg.s,e.x,e.y);return{x:q.x,y:q.y,r:tg.s.t==='wall'?0:.75}}return{x:HOME.x,y:HOME.y,r:HOME.r}}
 function liveTg(tg){if(!tg)return false;if(tg.kind==='b')return G.b[tg.s.id]&&!G.b[tg.s.id].dead;if(tg.kind==='home')return G.home.hp>0;return tg.o&&!tg.o.dead}
 function startAtk(e,tg){const E=ENEMIES[e.k];e.wind=E.smash?(e.k==='boss'?.42:.32):(E.throw?.22:.16);e.windMax=e.wind;e.atk=0;e.cd=E.cd;e.atkTg=tg;const a=aimOf(tg,e);e.atkA=Math.atan2(a.y-e.y,a.x-e.x);if(Math.abs(a.x-e.x)>.05)e.dir=a.x<e.x?2:3}
 function landAtk(e){const E=ENEMIES[e.k],tg=e.atkTg;e.atk=E.smash?(e.k==='boss'?.36:.28):.22;e.atkMax=e.atk;if(!liveTg(tg))return;
  const a=aimOf(tg,e);e.atkA=Math.atan2(a.y-e.y,a.x-e.x);if(Math.abs(a.x-e.x)>.05)e.dir=a.x<e.x?2:3;
  if(E.throw){const ang=e.atkA,x0=e.x+Math.cos(ang)*E.r,y0=e.y+Math.sin(ang)*E.r,dx=a.x-x0,dy=a.y-y0,dur=Math.max(.22,Math.hypot(dx,dy)/7.5);
-  G.shots.push({kind:'junk',arc:1,x:x0,y:y0,x0,y0,tgt:null,tx:a.x,ty:a.y,dmg:E.dmg*(G.mods.edmg||1)*(tg.kind==='home'||tg.kind==='b'?(G.mods.esmash||1):1),t:0,dur,h:.7,z:0,byP:0,tgB:tg})}
+  G.shots.push({kind:'junk',arc:1,x:x0,y:y0,x0,y0,tgt:null,tx:a.x,ty:a.y,dmg:E.dmg*(G.mods.edmg||1)*(tg.kind==='home'||tg.kind==='b'?(G.mods.esmash||1):1),t:0,dur,h:.7,z:0,byP:0,tgB:tg,byE:e})}
  else{hitTarget(e,tg,E.dmg*(tg.kind==='b'&&E.smash?1.6:1));if(E.smash){G.shake=Math.max(G.shake,e.k==='boss'?.28:.16);G.fx.push({k:'quake',x:a.x,y:a.y,t:0,life:.4,r:e.k==='boss'?1.8:1.2})}}}
 function stepEnemy(e,dt){const E=ENEMIES[e.k];e.cd-=dt;e.flash=Math.max(0,(e.flash||0)-dt);if(e.stun>0){e.stun-=dt;e.wind=0;return}
  if((e.wind||0)>0){e.wind-=dt;e.moving=false;if(e.wind<=0){e.wind=0;landAtk(e)}return}
@@ -214,8 +243,8 @@ function stepUnit(u,dt){const U=UNITS[u.k],s=spotOf(u.home),b=G.b[s.id];u.flash=
  if(u.dead){if(G.phase==='night'&&!b.dead){u.respawn-=dt;if(u.respawn<=0){u.dead=0;u.hp=u.max;u.x=s.x;u.y=s.y+.6}}return}
  u.cd-=dt;const an=unitAnchor(u);let goal=an,tg=null;
  if(G.phase==='night'){tg=nearestEnemy(u.x,u.y,3.4*(G.mods.urange||1));if(tg&&dist(tg,an)>5.5*(G.mods.urange||1))tg=null}
- const dmg=U.dmg*G.mods.pet*(G.mods.udmg||1)*(1+.3*(b.lv-1))*(G.home.aura>1&&Math.hypot(u.x-HOME.x,u.y-HOME.y)<4.6?G.home.aura:1),rng=U.range*(G.mods.urange||1);
- if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=rng){u.moving=false;if(u.cd<=0){u.cd=U.cd*(G.mods.ucd||1);u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9,'u');else hurtEnemy(tg,dmg,0,'u')}u.dir=tg.x<u.x?2:3;return}goal=tg}
+ const dmg=U.dmg*G.mods.pet*(G.mods.udmg||1)*(1+.3*(b.lv-1))*campDmgMul(b)*(G.home.aura>1&&Math.hypot(u.x-HOME.x,u.y-HOME.y)<4.6?G.home.aura:1),rng=U.range*(G.mods.urange||1);
+ if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=rng){u.moving=false;if(u.cd<=0){u.cd=U.cd*(G.mods.ucd||1)*(hasPick(b,'fierce')?0.85:1);u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9,'u');else hurtEnemy(tg,dmg,0,'u')}u.dir=tg.x<u.x?2:3;return}goal=tg}
  const dx=goal.x-u.x,dy=goal.y-u.y,d=Math.hypot(dx,dy);if(d<.15){u.moving=false;u.path=null;return}
  const sp=Math.min(d,U.spd*(G.mods.uspd||1)*dt*(d>3?1.4:1));let vx=dx/d,vy=dy/d;
  if(!lineClear(u.x,u.y,u.x+vx*Math.min(.8,d),u.y+vy*Math.min(.8,d),.26,0)){u.pathT=(u.pathT||0)-dt;if(!u.path||u.pathT<=0){u.path=astar(u.x,u.y,goal.x,goal.y,1);u.pathT=.45}
@@ -287,6 +316,12 @@ function panbaoPawLocal(w,h,pose){const sh=imgToLocal(armFlip(pose.side,ARM_SH[0
 function panbaoPawWorld(){const im=babyImg.idle0,L=panbaoLayout(im),p=panbaoPose(),paw=panbaoPawLocal(L.w,L.h,p);
  return{x:(L.ox+paw.x-VW/2-OX)/T+cam.x,y:(L.oy+paw.y-VH/2-OY)/T+cam.y}}
 
+function homeHas(id){return !!(G.home.bpicks&&G.home.bpicks.includes(id))}
+function fireBottles(tg0){const paws=panbaoPawWorld(),x0=paws.x,y0=paws.y,n=homeHas('double')?2:1,dmg=(G.home.bdmg||5)*(homeHas('double')?0.75:1);
+ const splash=homeHas('milkbomb')?1.7+(homeHas('sticky')?0.4:0):homeHas('sticky')?1.1:0,slow=(homeHas('milkbomb')||homeHas('sticky'))?(homeHas('sticky')?2.4:1.5):0;
+ const tgs=[];if(tg0&&!tg0.dead)tgs.push(tg0);for(const e of nearestEnemies(HOME.x,HOME.y,(G.home.brange||3.8)+1,4))if(!tgs.some(q=>q.id===e.id))tgs.push(e);
+ for(let i=0;i<n;i++){const tg=tgs[i]||tgs[0];if(!tg)continue;const dur=Math.max(.28,Math.hypot(tg.x-x0,tg.y-y0)/7.2);
+  G.shots.push({kind:'bottle',arc:1,x:x0,y:y0,x0,y0,tgt:tg,tx:tg.x,ty:tg.y-.25,dmg,t:0,dur,h:1.2,z:0,byP:0,splash,splashMul:.65,slow})}}
 function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark+=((G.phase==='night'?1:0)-G.dark)*Math.min(1,dt*1.5);
  for(const p of Object.values(G.players))stepPlayer(p,dt);
  if(G.phase==='night'){if(navDirty)rebuildNav();G.nightT+=dt;const n=G.night+1,mul=(1+.18*(n-1))*G.mods.ehp;
@@ -296,13 +331,15 @@ function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark
   // 互相挤开
   const es=G.enemies;for(let i=0;i<es.length;i++)for(let k=i+1;k<es.length;k++){const a=es[i],b=es[k],rr=ENEMIES[a.k].r+ENEMIES[b.k].r,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d>0&&d<rr){const o=(rr-d)/2*.5;a.x-=dx/d*o;a.y-=dy/d*o;b.x+=dx/d*o;b.y+=dy/d*o}}for(const e of es)if(!e.dead)pushOut(e,ENEMIES[e.k].r,1);
   // 弹弓塔 + 家（胖宝扔奶瓶）
-  for(const s of SPOTS){const b=G.b[s.id];if(s.t!=='tower'||!b.lv||b.dead)continue;b.cd-=dt;if(b.cd>0)continue;const tg=nearestEnemy(s.x,s.y,bStat(s,'range',b.lv)*(G.mods.trange||1));if(tg){b.cd=bStat(s,'cd',b.lv)*(G.mods.trate||1);shoot({x:s.x,y:s.y-.6},tg,bStat(s,'dmg',b.lv)*(G.mods.tdmg||1),'pebble',12)}}
+  for(const s of SPOTS){const b=G.b[s.id];if(s.t!=='tower'||!b.lv||b.dead)continue;b.cd-=dt;if(b.cd>0)continue;
+   const range=bStat(s,'range',b.lv)*(G.mods.trange||1)*(hasPick(b,'trange')?1.2:1),dmg=bStat(s,'dmg',b.lv)*(G.mods.tdmg||1)*(hasPick(b,'tdmg')?1.25:1);
+   const volley=hasPick(b,'volley'),tgs=nearestEnemies(s.x,s.y,range,volley?3:1);if(!tgs.length)continue;
+   b.cd=bStat(s,'cd',b.lv)*(G.mods.trate||1);const n=volley?3:1,each=volley?dmg*.55:dmg,splash=hasPick(b,'bomb')?(hasPick(b,'pierce')?2.2:1.45):0,slow=hasPick(b,'slow')?1.6:0,pierce=hasPick(b,'pierce')&&!hasPick(b,'bomb')?1:0;
+   for(let i=0;i<n;i++){const tg=tgs[i%tgs.length];G.shots.push({x:s.x,y:s.y-.55,tgt:tg,tx:tg.x,ty:tg.y-.3,dmg:each,kind:'pebble',spd:12,t:0,byP:0,splash,splashMul:.6,pierce,slow})}}
   G.home.cd-=dt;
   if((G.home.throwT||0)>0){const prev=G.home.throwT,mx=G.home.throwMax||THROW_MAX;G.home.throwT=Math.max(0,G.home.throwT-dt);
    const p0=1-prev/mx,p1=1-G.home.throwT/mx,rel=THROW_RELEASE/mx;
-   if(p0<rel&&p1>=rel&&!G.home.threw){G.home.threw=1;const tg=G.home.throwTg;
-    if(tg&&!tg.dead){const paw=panbaoPawWorld(),x0=paw.x,y0=paw.y,dur=Math.max(.28,Math.hypot(tg.x-x0,tg.y-y0)/7.2);
-     G.shots.push({kind:'bottle',arc:1,x:x0,y:y0,x0,y0,tgt:tg,tx:tg.x,ty:tg.y-.25,dmg:G.home.bdmg||6,t:0,dur,h:1.2,z:0,byP:0})}}}
+   if(p0<rel&&p1>=rel&&!G.home.threw){G.home.threw=1;fireBottles(G.home.throwTg)}}
   if(G.home.cd<=0&&(G.home.throwT||0)<=0){const tg=nearestEnemy(HOME.x,HOME.y,G.home.brange||4);if(tg){G.home.cd=G.home.bcd||1.1;G.home.throwT=THROW_MAX;G.home.throwMax=THROW_MAX;G.home.threw=0;G.home.throwTg=tg;G.home.throwA=Math.atan2((tg.y-(HOME.y+1.6)),tg.x-HOME.x)}}
   if(G.home.hp<=0){G.home.hp=0;G.phase='lose';endGame(false)}}
  G.home.hurtT=Math.max(0,G.home.hurtT-dt);if(G.home.regen&&G.home.hp>0)G.home.hp=Math.min(G.home.max,G.home.hp+G.home.regen*dt);
@@ -313,12 +350,12 @@ function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark
  for(const s of G.shots){s.t+=dt;
   if(s.arc){if(s.tgB&&(s.tgB.kind==='p'||s.tgB.kind==='u')&&liveTg(s.tgB)){s.tx=s.tgB.o.x;s.ty=s.tgB.o.y-.2}else if(s.tgt&&!s.tgt.dead){s.tx=s.tgt.x;s.ty=s.tgt.y-.25}
    const p=Math.min(1,s.t/(s.dur||.4));s.x=s.x0+(s.tx-s.x0)*p;s.y=s.y0+(s.ty-s.y0)*p;s.z=Math.sin(p*Math.PI)*(s.h||1);
-   if(p>=1){s.done=1;if(s.kind==='bottle')G.fx.push({k:'splash',x:s.x,y:s.y,t:0,life:.32});
-    if(s.tgB)dealTo(s.tgB,s.dmg,s);else if(s.tgt&&!s.tgt.dead)hurtEnemy(s.tgt,s.dmg,0,s.byP)}
+   if(p>=1){s.done=1;if(s.kind==='bottle'){G.fx.push({k:'splash',x:s.x,y:s.y,t:0,life:.32});impactShot(s,s.tgt&&!s.tgt.dead?s.tgt:null)}
+    else if(s.tgB)dealTo(s.tgB,s.dmg,s);else if(s.tgt&&!s.tgt.dead)hurtEnemy(s.tgt,s.dmg,0,s.byP)}
    continue}
   if(s.vx!=null){s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;for(const e of enemiesNear(s.x,s.y,.35))if(!s.hit.has(e.id)){s.hit.add(e.id);hurtEnemy(e,s.dmg,0,s.byP)}if(s.life<=0)s.done=1;continue}
   if(s.tgt&&!s.tgt.dead){s.tx=s.tgt.x;s.ty=s.tgt.y-.3}const dx=s.tx-s.x,dy=s.ty-s.y,d=Math.hypot(dx,dy),mv=s.spd*dt;
-  if(d<=mv+.1){s.done=1;if(s.tgt&&!s.tgt.dead)hurtEnemy(s.tgt,s.dmg,0,s.byP)}else{s.x+=dx/d*mv;s.y+=dy/d*mv}}
+  if(d<=mv+.1){s.done=1;impactShot(s,s.tgt&&!s.tgt.dead?s.tgt:null)}else{s.x+=dx/d*mv;s.y+=dy/d*mv}}
  G.shots=G.shots.filter(s=>!s.done);G.enemies=G.enemies.filter(e=>!e.dead);
  for(const c of G.coins){c.t+=dt;if(c.t>=.7&&!c.done){c.done=1;sfx('coin');hooks.coin&&hooks.coin()}}G.coins=G.coins.filter(c=>!c.done);G.shake=Math.max(0,G.shake-dt);for(const f of G.fx)f.t+=dt;G.fx=G.fx.filter(f=>f.t<f.life);for(const f of G.floats)f.t+=dt;G.floats=G.floats.filter(f=>f.t<1.1);
  if(G.phase==='night'&&!G.spawnQ.length&&!G.enemies.length)morning()}
@@ -353,7 +390,7 @@ function critter(c,k,dir,ph,mv,flash,atk){const f=dir===2?-1:1,b=mv?Math.abs(Mat
  const [body,dark,light]=flash?['#fff','#fff','#fff']:C;
  const E=(x,y,rx,ry,col,w=.05,rot=0)=>{c.beginPath();c.ellipse(x,y,rx,ry,rot,0,7);c.fillStyle=col;c.fill();if(w){c.lineWidth=w;c.strokeStyle=K;c.stroke()}};
  c.beginPath();c.ellipse(.5,.93,.3,.06,0,0,7);c.fillStyle='rgba(60,40,20,.25)';c.fill();
- if(k==='duck'){E(.5,.7-b,.26,.22,body);E(.36,.68-b,.1,.07,dark,.04,.4);E(.62,.44-b,.17,.16,body);E(.8,.47-b,.08,.04,'#ff9a3a',.04);E(.66,.41-b,.022,.022,K,0);E(.43,.92,.05,.03,'#ff9a3a',.03);E(.57,.92,.05,.03,'#ff9a3a',.03);c.restore();return}
+ if(k==='duck'){E(.5,.7-b,.26,.22,body);E(.36,.68-b,.1,.07,dark,.04,.4);E(.62,.44-b,.17,.16,body);E(.8,.47-b,.08,.04,'#ff9a3a',.04);E(.66,.41-b,.022,.022,K,0);E(.43,.92,.05,.03,'#ff9a3a',.03);E(.57,.92,.05,.03,'#ff9a3a',.03);c.restore();c.restore();return}
  // 尾巴
  if(k==='raccoon'){for(let i=0;i<3;i++)E(.18-i*.06,.62-i*.05-b,.08,.06,i%2?K:body,.04,.5)}else if(k==='kitten'){c.beginPath();c.moveTo(.26,.7);c.quadraticCurveTo(.08,.6,.16,.42);c.lineWidth=.07;c.strokeStyle=K;c.lineCap='round';c.stroke();c.lineWidth=.04;c.strokeStyle=body;c.stroke()}else if(k==='wolf')E(.2,.6-b,.13,.06,dark,.04,-.5);
  // 腿 + 身体
@@ -487,10 +524,10 @@ function collectMapLabels(ns){const labs=[];
    else ay=Y+T*.1;
    const txt=near?`${bName(s)}  ${c}💰`:`${shortName(s)} ${c}`;
    labs.push({kind:'spot',pri,ax,ay,text:txt,near,ok,fs:near?T*.26:T*.22})}
-  else{if(s.t!=='wall'){const oy=s.t==='tower'?T*.62:s.t==='farm'?T*.9:T*.7;labs.push({kind:'stars',pri:36,ax:X,ay:Y+oy,text:'★'.repeat(b.lv),fs:T*.3,force:1})}
+  else{const ic=pickIcons(b);if(s.t!=='wall'){const oy=s.t==='tower'?T*.62:s.t==='farm'?T*.82:T*.7;labs.push({kind:'stars',pri:36,ax:X,ay:Y+oy,text:ic||('★'.repeat(b.lv)),fs:T*(ic?0.34:0.3),force:1,icon:!!ic})}else if(ic){labs.push({kind:'stars',pri:24,ax:X,ay:Y+T*.42,text:ic,fs:T*.28,force:1,icon:1})}
    if((s.t==='cats'||s.t==='ducks')&&!b.dead){let soon=0;for(const u of G.units)if(u.home===s.id&&u.dead&&u.respawn>0){if(!soon||u.respawn<soon)soon=u.respawn}
     if(soon>0)labs.push({kind:'revive',pri:90,ax:X,ay:Y-T*1.75,text:'复活 '+Math.ceil(soon),fs:T*.24,force:1})}}}
- if(G.home&&G.home.up)labs.push({kind:'stars',pri:32,ax:sx(HOME.x),ay:sy(HOME.y-2.2),text:'★'.repeat(G.home.up),fs:T*.3,force:1});
+ if(G.home&&(G.home.up||(G.home.bpicks||[]).length)){const ic=(G.home.bpicks||[]).map(id=>(branchById('home',id)||{}).ic||'').join('')||('★'.repeat(G.home.up||0));labs.push({kind:'stars',pri:32,ax:sx(HOME.x),ay:sy(HOME.y-2.2),text:ic,fs:T*.32,force:1,icon:![...ic].every(ch=>ch==='★')})}
  if(G.players)for(const p of Object.values(G.players))if(!p.dead){
   const t=DOGS[p.dog].name;ctx.font=`900 ${T*.3}px sans-serif`;const nw=ctx.measureText(t).width+8;
   labs.push({kind:'block',pri:999,ax:sx(p.x),ay:sy(p.y-1.45),w:nw,h:T*.34,bx:sx(p.x)-nw/2,by:sy(p.y-1.45)-T*.2,fixed:1,show:0});
@@ -509,7 +546,7 @@ function layoutMapLabels(labs){const gap=6,padX=6,padY=3,m=6,top=(view.top||0)+4
  return labs}
 function drawMapLabels(ns){if(!G)return;ctx.setTransform(DPR,0,0,DPR,0,0);const labs=layoutMapLabels(collectMapLabels(ns));
  for(const L of labs){if(!L.show)continue;ctx.save();
-  if(L.kind==='stars'){ctx.font=`900 ${L.fs}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=2.6;ctx.strokeStyle='#6b4a32';ctx.fillStyle='#ffd23f';ctx.strokeText(L.text,L.bx+L.w/2,L.by+L.h/2);ctx.fillText(L.text,L.bx+L.w/2,L.by+L.h/2)}
+  if(L.kind==='stars'){const x=L.bx+L.w/2,y=L.by+L.h/2;ctx.textAlign='center';ctx.textBaseline='middle';if(L.icon){ctx.font=`${L.fs}px sans-serif`;ctx.fillText(L.text,x,y)}else{ctx.font=`900 ${L.fs}px sans-serif`;ctx.lineWidth=2.6;ctx.strokeStyle='#6b4a32';ctx.fillStyle='#ffd23f';ctx.strokeText(L.text,x,y);ctx.fillText(L.text,x,y)}}
   else{ctx.beginPath();ctx.roundRect(L.bx,L.by,L.w,L.h,L.h/2);
    if(L.kind==='revive'){ctx.fillStyle='rgba(40,28,18,.86)';ctx.strokeStyle='#fff';ctx.lineWidth=1.6;ctx.fill();ctx.stroke();ctx.fillStyle='#fff6c8'}
    else{ctx.fillStyle=L.near?'rgba(255,210,150,.95)':'rgba(255,248,231,.92)';ctx.strokeStyle=L.near?'#ff8c42':'rgba(122,75,29,.4)';ctx.lineWidth=L.near?2:1.2;ctx.fill();ctx.stroke();ctx.fillStyle=L.ok?'#c56a1c':'#7a4b1d'}
@@ -623,4 +660,4 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  for(const c of G.coins){const k=Math.min(1,c.t/.7),e=k*k,X0=sx(c.x),Y0=sy(c.y),X=X0+(view.gold.x-X0)*e,Y=Y0+(view.gold.y-Y0)*e-Math.sin(k*Math.PI)*T*1.2;ctx.save();ctx.fillStyle='#ffd23f';ctx.strokeStyle='#b8860b';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,T*.16,0,7);ctx.fill();ctx.stroke();ctx.restore()}
  for(const f of G.floats){ctx.save();ctx.globalAlpha=1-f.t/1.1;ctx.font=`900 ${T*(f.sm?.3:.4)}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#6b4a32';ctx.fillStyle=f.col;ctx.strokeText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.fillText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.restore()}
  if(G.phase==='night')drawOffscreen(W,H);drawMinimap(W,H)}
-window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf,useMap,flowAt,lineClear,pushOut,rebuildNav,bName,bDist,solidAt,enemySolid,enemyBlock,terrainBlock,spawnAt,astar,nearHome,homeUpCost,homeUpChoices,upgradeHome,applyHomeUp,rateStars,makeMods,buyBuff,upgradeHint,unitRespawn,panbaoPawWorld,panbaoPose,THROW_MAX,THROW_RELEASE,BOTTLE_FLY,inFan,faceAng,demolish,demolishValue};
+window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf,useMap,flowAt,lineClear,pushOut,rebuildNav,bName,bDist,solidAt,enemySolid,enemyBlock,terrainBlock,spawnAt,astar,nearHome,homeUpCost,homeUpChoices,upgradeHome,applyHomeUp,rateStars,makeMods,buyBuff,upgradeHint,unitRespawn,panbaoPawWorld,panbaoPose,THROW_MAX,THROW_RELEASE,BOTTLE_FLY,inFan,faceAng,demolish,demolishValue,branchKind,branchOpts,branchById,hasPick,pickIcons,autoBranch};

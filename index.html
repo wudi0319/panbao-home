@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <title>保卫胖宝</title>
-<link rel="stylesheet" href="style.css?v=26">
+<link rel="stylesheet" href="style.css?v=27">
 </head><body>
 <main id="stage"><canvas id="map"></canvas>
  <div id="hud">
@@ -61,16 +61,24 @@
  <p class="prep-forecast" id="prepForecast"></p>
  <div class="row prep-acts"><button id="prepBack" class="sm">返回</button><button id="prepGo" class="big">开始游戏</button></div>
 </div></div>
+<div id="branch" class="ov hidden"><div class="card branch-card">
+ <h2 id="branchTitle">建造</h2>
+ <p class="sub" id="branchSub">选一个路线</p>
+ <div class="branch-choices" id="branchChoices"></div>
+ <button id="branchCancel" class="sm" style="margin-top:10px">先不建</button>
+</div></div>
 <div id="homeUp" class="ov hidden"><div class="card">
  <h2 id="homeUpTitle">🏠 升级老家</h2>
- <p class="sub" id="homeUpSub">选一个加成，本局最多升 3 次</p>
+ <p class="sub" id="homeBottleLab">先给胖宝的奶瓶选一条路</p>
+ <div class="branch-choices" id="homeBottle"></div>
+ <p class="sub" id="homeUpSub">再选一个家园加成，本局最多升 3 次</p>
  <div class="home-choices" id="homeUpChoices"></div>
  <button id="homeUpCancel" class="sm" style="margin-top:10px">先不升</button>
 </div></div>
 <div id="end" class="ov hidden"><div class="card"><div id="endIcon" class="bigic"></div><h2 id="endTitle"></h2><p id="endStars" class="end-stars"></p><p id="endText"></p><p id="endUnlock" class="unl"></p><button id="againBtn" class="big">再来一次</button></div></div>
-<script src="js/sfx.js?v=26"></script>
-<script src="js/sprites.js?v=26"></script>
-<script src="js/data.js?v=26"></script>
-<script src="js/game.js?v=26"></script>
-<script src="js/ui.js?v=26"></script>
+<script src="js/sfx.js?v=27"></script>
+<script src="js/sprites.js?v=27"></script>
+<script src="js/data.js?v=27"></script>
+<script src="js/game.js?v=27"></script>
+<script src="js/ui.js?v=27"></script>
 </body></html>

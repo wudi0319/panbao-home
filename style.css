@@ -172,3 +172,16 @@ body.on-modal #joy,body.on-modal #acts{visibility:hidden;pointer-events:none}
  #homeUp .home-choices button{padding:5px 6px;font-size:12px}
 }
 #razedBtn{background:#e8d4b0;box-shadow:0 4px 0 #b89668;color:#5a3a20}
+
+.branch-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 4px}
+.branch-choices button{border:2px solid #f0d6ae;border-radius:14px;background:#fff;padding:10px 8px;font-size:14px;font-weight:800;color:#7a4b1d;text-align:center;font-family:inherit;min-height:88px;line-height:1.25}
+.branch-choices button .ic{display:block;font-size:26px;line-height:1.1;margin-bottom:2px}
+.branch-choices button small{display:block;font-weight:600;font-size:11px;color:#a0784f;margin-top:3px}
+.branch-choices button.on{border-color:#ff8c42;background:#ffe4cc;outline:2px solid #ff8c42}
+#branch .card,#homeUp .card{width:min(380px,96vw)}
+@media (orientation:landscape){
+ #branch .card{width:min(520px,96vw)}
+ #homeUp .card{width:min(620px,96vw);max-height:100%;overflow:auto}
+ .branch-choices button{min-height:72px;padding:8px 6px;font-size:13px}
+ .branch-choices button .ic{font-size:22px}
+}

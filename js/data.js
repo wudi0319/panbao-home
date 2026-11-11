@@ -236,7 +236,7 @@ function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5,m=(typeof G!=
  if(n===NIGHTS){const bt=dur*(m.bossEarly||.6);add('boss',1,bt,bt)}
  return out.sort((a,b)=>a.t-b.t)}
 // 下一级（或刚建造的 1 级）加成说明，给建造按钮用
-function upgradeHint(s,lv){const B=BUILD[s.t];if(!B||lv<1||lv>3)return '';
+function upgradeHint(s,lv){const opts=branchOpts(branchKind(s),lv);if(opts.length)return opts.map(o=>o.ic+o.name).join(' 或 ');const B=BUILD[s.t];if(!B||lv<1||lv>3)return '';
  if(s.t==='tower'){return lv===1?`伤害 ${B.dmg[0]} · 射程 ${B.range[0]}`:`伤害 ${B.dmg[lv-2]}→${B.dmg[lv-1]} · 射更远更快`}
  if(s.t==='cats'||s.t==='ducks'){const r=B.rev||[20,16,12];return lv===1?`${B.n[0]} 只 · 复活 ${r[0]} 秒`:`${B.n[lv-2]}→${B.n[lv-1]} 只 · 攻击更高 · 复活 ${r[lv-1]} 秒`}
  if(s.t==='farm'){return lv===1?`早上 +${B.gold[0]} 金`:`早上 ${B.gold[lv-2]}→${B.gold[lv-1]} 金`}
@@ -250,13 +250,62 @@ function condText(c){if(!c)return '';if(c.win)return '先通关任意一关';if(
 function buffOwned(r,id,all){const b=BUFFS[id];if(!b)return false;if(all)return true;if(!b.cost&&!b.unlock)return true;return !!(r.buffs&&r.buffs.includes(id))}
 function buffUnlocked(r,id,all){return condOk((BUFFS[id]||{}).unlock,r,all)}
 function debuffUnlocked(r,id,all){return condOk((DEBUFFS[id]||{}).unlock,r,all)}
+const ENEMY_STR=1.10; // 分支升级的补偿：全体敌人血量和攻击。调参上限 1.10
+const BRANCH={
+  tower:{
+    1:[{id:'volley',ic:'💫',name:'连珠',desc:'连射 3 发，分打不同敌人，每发 55% 伤害'},
+       {id:'bomb',ic:'💣',name:'炸弹',desc:'弹丸落地爆炸，伤到周围的敌人'}],
+    2:[{id:'tdmg',ic:'🔥',name:'加伤',desc:'弹弓塔伤害 +25%'},
+       {id:'trange',ic:'🎯',name:'射程',desc:'弹弓塔射程 +20%'}],
+    3:[{id:'slow',ic:'🐢',name:'减速',desc:'打中的敌人走得更慢'},
+       {id:'pierce',ic:'🗡️',name:'穿透',desc:'再穿过一个敌人；炸弹则炸得更开'}]
+  },
+  camp:{
+    1:[{id:'horde',ic:'🐾',name:'人海',desc:'多 1 只伙伴，倒下后更快复活'},
+       {id:'elite',ic:'💪',name:'精兵',desc:'血量 +30%，攻击 +25%'}],
+    2:[{id:'recruit',ic:'📣',name:'再招募',desc:'再多 1 只伙伴'},
+       {id:'fierce',ic:'⚔️',name:'狠打',desc:'攻击再 +25%，出手更快'}],
+    3:[{id:'rally',ic:'⏳',name:'急速复活',desc:'倒下后复活再快一截'},
+       {id:'iron',ic:'🛡️',name:'铁军',desc:'血量再 +35%'}]
+  },
+  farm:{
+    1:[{id:'harvest',ic:'🌾',name:'丰收',desc:'每天早上这片菜园再 +2 金'},
+       {id:'bounty',ic:'🪙',name:'聚宝',desc:'附近打倒敌人时再掉 1 金'}],
+    2:[{id:'soil',ic:'🥕',name:'沃土',desc:'早上再 +3 金'},
+       {id:'scavenge',ic:'✨',name:'拾荒',desc:'附近击杀掉落再 +1 金，范围更远'}],
+    3:[{id:'silo',ic:'🏚️',name:'粮仓',desc:'早上再 +4 金'},
+       {id:'fortune',ic:'🌟',name:'财神',desc:'附近击杀掉落再 +1 金'}]
+  },
+  wall:{
+    1:[{id:'ironwall',ic:'🧱',name:'铁壁',desc:'城墙生命 +30%'},
+       {id:'thorns',ic:'🌿',name:'荆棘',desc:'敌人打墙会反弹 20% 伤害'}],
+    2:[{id:'reinforce',ic:'🪨',name:'加固',desc:'生命再 +35%'},
+       {id:'spikes',ic:'🌵',name:'尖刺',desc:'反弹再 +20%'}],
+    3:[{id:'fort',ic:'🏰',name:'堡垒',desc:'生命再 +40%，更耐打'},
+       {id:'lash',ic:'⚡',name:'反噬',desc:'反弹再 +20%，还能让敌人一顿'}]
+  },
+  home:{
+    1:[{id:'double',ic:'🍼',name:'连发',desc:'连续扔出 2 个奶瓶，每个伤害 75%'},
+       {id:'milkbomb',ic:'💥',name:'奶粉炸弹',desc:'奶瓶炸开范围更大，还能减速'}],
+    2:[{id:'quick',ic:'⚡',name:'快手',desc:'扔奶瓶更快'},
+       {id:'longarm',ic:'🎯',name:'远投',desc:'扔得更远'}],
+    3:[{id:'rich',ic:'💪',name:'加料',desc:'奶瓶伤害 +40%'},
+       {id:'sticky',ic:'🫧',name:'黏稠',desc:'击中或炸开都会减速，时间更长'}]
+  }
+};
+function branchKind(s){return !s?null:(s.t==='cats'||s.t==='ducks'?'camp':s.t==='wall'?'wall':s.t)}
+function branchOpts(kind,lv){return (BRANCH[kind]&&BRANCH[kind][lv])||[]}
+function branchById(kind,id){const t=BRANCH[kind];if(!t||!id)return null;for(const lv of [1,2,3]){const o=(t[lv]||[]).find(x=>x.id===id);if(o)return o}return null}
+function hasPick(b,id){return !!(b&&b.picks&&b.picks.includes(id))}
+function pickIcons(b){return ((b&&b.picks)||[]).map(id=>{for(const k in BRANCH){const o=branchById(k,id);if(o)return o.ic}return ''}).join('')}
+
 function makeMods(buffs,debuffs,diff){const B=new Set(buffs||[]),D=new Set(debuffs||[]),d=diff||{};
  return{gold:(B.has('piggy')?1.27:1)*(D.has('poor')?0.7:1),start:B.has('piggy')?9:0,
   pet:(B.has('pets')?1.315:1)*(D.has('thinpets')?0.75:1),hp:B.has('tough')?1.5:1,
   stone:(B.has('stone')?1.4:1)*(D.has('leaky')?0.75:1),
   bhp:B.has('fortify')?1.36:1,bregen:B.has('mortar')?4:0,
-  ehp:(d.ehp||1)*(D.has('wolfy')?1.4:1)*(D.has('nightmare')?1.2:1)*(D.has('tanky')?1.3:1),
-  edmg:(d.edmg||1)*(D.has('wolfy')?1.2:1)*(D.has('fierce')?1.3:1),esmash:D.has('smash')?1.5:1,
+  ehp:(d.ehp||1)*(D.has('wolfy')?1.4:1)*(D.has('nightmare')?1.2:1)*(D.has('tanky')?1.3:1)*ENEMY_STR,
+  edmg:(d.edmg||1)*(D.has('wolfy')?1.2:1)*(D.has('fierce')?1.3:1)*ENEMY_STR,esmash:D.has('smash')?1.5:1,
   count:(d.count||1)*(D.has('wolfy')?1.25:1)*(D.has('late')?1.3:1)*(D.has('nightmare')?1.15:1),
   drop:D.has('poor')?0.7:1,
   espd:(d.spd||1)*(D.has('zoom')?1.25:1)*(D.has('nightmare')?1.15:1),
