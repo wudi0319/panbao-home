@@ -8,58 +8,69 @@ const WEAPONS={
  bone:{name:'骨头棒槌',ic:'🦴',desc:'出手慢，砸一片',kind:'area',range:2.1,dmg:42,cd:1.2,
   skill:{name:'震地一击',cd:12,desc:'大范围重击并晕住敌人'},unlock:'win'}};
 const TALENTS={}; // 旧天赋已并入加成 / 挑战
-const BUFF_MAX=3,DEBUFF_MAX=3,HOME_UP_COST=[8,12,18];
+const BUFF_MAX=3,DEBUFF_MAX=3,HOME_UP_COST=[8,14,20];
 const CATS={hero:{name:'英雄',ic:'🐶'},unit:{name:'小兵',ic:'🐾'},build:{name:'建筑',ic:'🏠'},econ:{name:'经济',ic:'💰'},enemy:{name:'敌人',ic:'🐺'}};
 const BUFFS={
- tough:{name:'结实身体',ic:'❤️',cat:'hero',desc:'自己的血量 +60%',cost:0},
- might:{name:'热乎乎的手',ic:'🔥',cat:'hero',desc:'自己攻击 +20%',cost:5,unlock:{stars:8}},
- swift:{name:'身手敏捷',ic:'⚡',cat:'hero',desc:'技能冷却缩短 20%',cost:4,unlock:{map:'garden'}},
- stride:{name:'飞毛腿',ic:'👟',cat:'hero',desc:'自己走得更快（+20%）',cost:4,unlock:{stars:6}},
- recover:{name:'缓过劲来',ic:'🩹',cat:'hero',desc:'脱战后回血快一半',cost:3,unlock:{best:3}},
+ tough:{name:'结实身体',ic:'❤️',cat:'hero',desc:'自己的血量 +50%',cost:0},
+ might:{name:'热乎乎的手',ic:'🔥',cat:'hero',desc:'自己攻击 +20%',cost:6,unlock:{stars:10}},
+ swift:{name:'身手敏捷',ic:'⚡',cat:'hero',desc:'出手加快 15%，技能冷却也缩短 15%',cost:5,unlock:{map:'garden'}},
+ stride:{name:'飞毛腿',ic:'👟',cat:'hero',desc:'自己走得更快（+20%）',cost:5,unlock:{stars:7}},
+ recover:{name:'缓过劲来',ic:'🩹',cat:'hero',desc:'脱战后回血快一半',cost:4,unlock:{best:4}},
+ claws:{name:'长爪子',ic:'🤚',cat:'hero',desc:'自己的攻击距离 +25%',cost:5,unlock:{stars:8}},
  pets:{name:'小动物加油',ic:'💪',cat:'unit',desc:'小猫小鸭血量和攻击 +35%',cost:0},
- hatch:{name:'快快长大',ic:'🥚',cat:'unit',desc:'小猫小鸭倒下后更快复活（缩短 30%）',cost:4,unlock:{stars:6}},
- pals:{name:'多一只伙伴',ic:'🐾',cat:'unit',desc:'每个营地多 1 只小动物',cost:6,unlock:{map:'fields'}},
- pack:{name:'跟得紧',ic:'🏃',cat:'unit',desc:'小动物跑得更快（+25%）',cost:3,unlock:{map:'barbican'}},
- bite:{name:'小尖牙',ic:'🦷',cat:'unit',desc:'小猫小鸭攻击再 +25%',cost:5,unlock:{stars:8}},
- stone:{name:'坚固的家',ic:'🏠',cat:'build',desc:'家和城墙血量 +50%',cost:3,unlock:{best:3}},
- tower:{name:'弹弓熟练',ic:'🏹',cat:'build',desc:'弹弓塔伤害 +25%',cost:3,unlock:{map:'barbican'}},
- longshot:{name:'弹弓拉远',ic:'🎯',cat:'build',desc:'弹弓塔射程 +20%',cost:4,unlock:{map:'garden'}},
- rapid:{name:'连珠弹弓',ic:'💫',cat:'build',desc:'弹弓塔射速 +20%',cost:5,unlock:{map:'bridge'}},
+ hatch:{name:'快快长大',ic:'🥚',cat:'unit',desc:'小猫小鸭倒下后更快复活（缩短 30%）',cost:4,unlock:{stars:7}},
+ pals:{name:'多一只伙伴',ic:'🐾',cat:'unit',desc:'每个营地多 1 只小动物',cost:7,unlock:{map:'fields'}},
+ pack:{name:'冲锋陷阵',ic:'🏃',cat:'unit',desc:'小动物跑得更快（+25%），出手也更快（+15%）',cost:4,unlock:{map:'barbican'}},
+ bite:{name:'撕咬',ic:'🦷',cat:'unit',desc:'小猫小鸭攻击再 +15%，并会短暂减速敌人',cost:6,unlock:{stars:10}},
+ sentry:{name:'小哨兵',ic:'👀',cat:'unit',desc:'小猫小鸭攻击距离 +30%',cost:5,unlock:{map:'garden'}},
+ stone:{name:'坚固的家',ic:'🏠',cat:'build',desc:'家和城墙血量 +40%',cost:4,unlock:{best:4}},
+ tower:{name:'弹弓熟练',ic:'🏹',cat:'build',desc:'弹弓塔伤害 +25%',cost:4,unlock:{map:'barbican'}},
+ longshot:{name:'弹弓拉远',ic:'🎯',cat:'build',desc:'弹弓塔射程 +20%',cost:5,unlock:{map:'garden'}},
+ rapid:{name:'连珠弹弓',ic:'💫',cat:'build',desc:'弹弓塔射速 +20%',cost:6,unlock:{map:'bridge'}},
+ fortify:{name:'安得广厦',ic:'🛠️',cat:'build',desc:'弹弓塔、营地和菜园的血量 +40%',cost:4,unlock:{stars:7}},
+ mortar:{name:'修修补补',ic:'🧰',cat:'build',desc:'夜里建筑会慢慢回血',cost:5,unlock:{stars:10}},
  piggy:{name:'存钱罐',ic:'🐷',cat:'econ',desc:'开局 +10 金币，早上收入 +30%',cost:0},
- harvest:{name:'丰收年',ic:'🌾',cat:'econ',desc:'每座菜园早上多收 2 金',cost:4,unlock:{stars:6}},
- luck:{name:'幸运星',ic:'🌟',cat:'econ',desc:'打倒敌人多掉 1 金',cost:5,unlock:{map:'bridge'}},
- feast:{name:'满桌好菜',ic:'🍖',cat:'econ',desc:'开局再 +8 金，掉落 +20%',cost:8,unlock:{map:'mountain'}},
- cheapw:{name:'砌墙能手',ic:'🧱',cat:'econ',desc:'城墙每级少花 1 金币',cost:5,unlock:{stars:10}},
- thrift:{name:'能省则省',ic:'🏷️',cat:'econ',desc:'建造、升级和老家升级都便宜 20%',cost:4,unlock:{map:'garden'}},
- interest:{name:'小金库',ic:'🏦',cat:'econ',desc:'早上按手里剩的钱收 15% 利息（最多 8）',cost:4,unlock:{map:'barbican'}},
- salvage:{name:'拆了还能用',ic:'♻️',cat:'econ',desc:'白天可拆除建筑，退回 60% 造价',cost:5,unlock:{stars:8}}
+ harvest:{name:'丰收年',ic:'🌾',cat:'econ',desc:'每座菜园早上多收 2 金',cost:5,unlock:{stars:7}},
+ luck:{name:'幸运星',ic:'🌟',cat:'econ',desc:'打倒敌人多掉 1 金',cost:6,unlock:{map:'bridge'}},
+ thrift:{name:'能省则省',ic:'🏷️',cat:'econ',desc:'建造、升级和老家升级都便宜 15%',cost:5,unlock:{map:'garden'}},
+ interest:{name:'小金库',ic:'🏦',cat:'econ',desc:'早上按手里剩的钱收 15% 利息（最多 8）',cost:5,unlock:{map:'barbican'}},
+ salvage:{name:'拆了还能用',ic:'♻️',cat:'econ',desc:'白天可拆除建筑，退回 60% 造价',cost:6,unlock:{stars:10}},
+ bounty:{name:'赏金令',ic:'📜',cat:'econ',desc:'打倒大笨熊和熊大王时掉落翻倍',cost:6,unlock:{stars:8}},
+ payday:{name:'发饷日',ic:'🪙',cat:'econ',desc:'每天早上，每座还在的弹弓塔和营地额外 +2 金',cost:5,unlock:{map:'barbican'}}
 };
 const DEBUFFS={
- frail:{name:'玻璃心',ic:'💔',cat:'hero',desc:'自己受到的伤害 +30%',star:1,unlock:{best:3}},
+ frail:{name:'玻璃心',ic:'💔',cat:'hero',desc:'自己受到的伤害 +30%',star:1,unlock:{best:4}},
  sluggish:{name:'灌铅腿',ic:'🐢',cat:'hero',desc:'自己走得更慢，技能冷却更长',star:1,unlock:{map:'yard'}},
  storm:{name:'连绵阴雨',ic:'🌧️',cat:'hero',desc:'自己的攻击变低',star:1,unlock:{map:'fields'}},
- thinpets:{name:'没吃饭',ic:'🥬',cat:'unit',desc:'小猫小鸭血量和攻击 -25%',star:1,unlock:{stars:5}},
- latepups:{name:'午睡延迟',ic:'😴',cat:'unit',desc:'小猫小鸭复活慢 40%',star:1,unlock:{map:'barbican'}},
+ shortarms:{name:'胳膊短',ic:'✋',cat:'hero',desc:'自己的攻击距离缩短 20%',star:1,unlock:{stars:6}},
+ thinpets:{name:'没吃饭',ic:'🥬',cat:'unit',desc:'小猫小鸭血量和攻击 -25%',star:1,unlock:{stars:6}},
+ latepups:{name:'没精神',ic:'😴',cat:'unit',desc:'小猫小鸭复活慢 40%，跑得也更慢',star:1,unlock:{map:'barbican'}},
  shortbow:{name:'弹弓眼花',ic:'👓',cat:'build',desc:'弹弓塔射程缩短 20%',star:1,unlock:{map:'fields'}},
- smash:{name:'拆家党',ic:'🪓',cat:'build',desc:'敌人拆建筑更凶',star:1,unlock:{stars:8}},
- leaky:{name:'墙缝',ic:'🧱',cat:'build',desc:'家和城墙血量 -25%',star:1,unlock:{stars:8}},
- poor:{name:'歉收年',ic:'🪙',cat:'econ',desc:'早上收入和掉落都少 30%',star:1,unlock:{stars:5}},
- pricey:{name:'物价上涨',ic:'📈',cat:'econ',desc:'建造和升级都贵 25%',star:1,unlock:{map:'yard'}},
- wolfy:{name:'狼来了',ic:'🐺',cat:'enemy',desc:'敌人更多、更厚、更疼',star:1,unlock:{best:3}},
+ misfire:{name:'弹弓哑火',ic:'💨',cat:'build',desc:'弹弓塔射速变慢 25%',star:1,unlock:{stars:6}},
+ smash:{name:'拆家党',ic:'🪓',cat:'build',desc:'敌人拆建筑更凶',star:1,unlock:{stars:10}},
+ leaky:{name:'墙缝',ic:'🧱',cat:'build',desc:'家和城墙血量 -25%',star:1,unlock:{stars:10}},
+ poor:{name:'歉收年',ic:'🪙',cat:'econ',desc:'早上收入和掉落都少 30%',star:2,unlock:{stars:6}},
+ pricey:{name:'物价上涨',ic:'📈',cat:'econ',desc:'建造和升级都贵 25%',star:2,unlock:{map:'yard'}},
+ wolfy:{name:'狼来了',ic:'🐺',cat:'enemy',desc:'敌人更多、更厚、更疼',star:2,unlock:{best:4}},
  zoom:{name:'疾风脚',ic:'💨',cat:'enemy',desc:'敌人走得更快',star:1,unlock:{map:'yard'}},
  late:{name:'长夜漫漫',ic:'🌙',cat:'enemy',desc:'每夜敌人再多一些，第一夜就有狼',star:1,unlock:{map:'barbican'}},
- bossy:{name:'大王发怒',ic:'👑',cat:'enemy',desc:'熊大王更结实，来得更早',star:1,unlock:{map:'bridge'}},
+ tanky:{name:'皮糙肉厚',ic:'🪨',cat:'enemy',desc:'敌人血量 +30%',star:2,unlock:{stars:6}},
+ fierce:{name:'下手更狠',ic:'💢',cat:'enemy',desc:'敌人攻击 +30%',star:1,unlock:{stars:6}},
+ rush:{name:'一窝蜂',ic:'🌪️',cat:'enemy',desc:'敌人出得更密、来得更快',star:1,unlock:{map:'garden'}},
+ bossy:{name:'大王发怒',ic:'👑',cat:'enemy',desc:'大笨熊更厚，熊大王更结实、来得更早',star:1,unlock:{map:'bridge'}},
  nightmare:{name:'噩梦夜',ic:'👿',cat:'enemy',desc:'敌人又多又快又厚',star:2,unlock:{map:'mountain'}}
 };
 const HOME_UPS={
  vigor:{name:'多吃一口',ic:'🍖',cat:'hero',desc:'自己的最大生命 +40，并立刻补这么多血'},
  sharp:{name:'磨磨爪',ic:'⚔️',cat:'hero',desc:'自己攻击 +15%'},
  haste:{name:'拔腿就跑',ic:'💨',cat:'hero',desc:'自己走得更快，技能冷却稍短'},
- aura:{name:'加油鼓劲',ic:'📣',cat:'unit',desc:'家附近的小动物攻击更高'},
+ stretch:{name:'再探探',ic:'🤚',cat:'hero',desc:'自己的攻击距离 +20%'},
+ aura:{name:'守家助威',ic:'📣',cat:'unit',desc:'家附近的小动物攻击更高，也更耐打'},
  beds:{name:'多一张小床',ic:'🐣',cat:'unit',desc:'每个营地多 1 只小动物'},
  recall:{name:'招招手',ic:'👋',cat:'unit',desc:'小猫小鸭复活加快 25%'},
  drill:{name:'小教练',ic:'🏅',cat:'unit',desc:'所有小猫小鸭攻击 +20%'},
- thick:{name:'厚墙家',ic:'🧱',cat:'build',desc:'家的最大生命 +80，并立刻回满'},
+ pelt:{name:'厚厚的毛',ic:'🧥',cat:'unit',desc:'所有小猫小鸭血量 +30%'},
+ thick:{name:'厚墙家',ic:'🧱',cat:'build',desc:'家的最大生命 +60，并立刻回满'},
  bottle:{name:'多多奶瓶',ic:'🍼',cat:'build',desc:'胖宝扔奶瓶更快、更远、更疼'},
  regen:{name:'暖暖家',ic:'🩹',cat:'build',desc:'家里会慢慢回血'},
  cozy:{name:'热乎乎的炉子',ic:'🔥',cat:'build',desc:'靠近家的敌人走得更慢'},
@@ -70,8 +81,8 @@ const HOME_UPS={
 };
 // 建筑每级数值（下标 0 = 1级）
 const BUILD={
- wall:{name:'城墙',ic:'🧱',cost:[3,6,12],hp:[150,300,520],armor:[0,.12,.25]},
- tower:{name:'弹弓塔',ic:'🏹',cost:[8,14,22],hp:[80,140,220],dmg:[8,13,20],range:[5,5.6,6.2],cd:[.9,.75,.6]},
+ wall:{name:'城墙',ic:'🧱',cost:[3,6,12],hp:[150,300,480],armor:[0,.12,.25]},
+ tower:{name:'弹弓塔',ic:'🏹',cost:[8,14,22],hp:[80,140,220],dmg:[7,12,18],range:[5,5.6,6.2],cd:[.9,.75,.6]},
  cats:{name:'小猫营',ic:'🐱',cost:[8,14,22],hp:[120,200,300],n:[2,3,4],unit:'kitten',rev:[20,16,12]},
  ducks:{name:'小鸭营',ic:'🐤',cost:[8,14,22],hp:[120,200,300],n:[2,3,4],unit:'duck',rev:[20,16,12]},
  farm:{name:'菜园',ic:'🥕',cost:[5,10,16],hp:[60,90,130],gold:[3,5,8]}};
@@ -79,10 +90,10 @@ const UNITS={
  kitten:{name:'小猫',hp:45,dmg:7,range:.8,cd:.7,spd:3.2,r:.3},
  duck:{name:'小鸭',hp:30,dmg:6,range:3.5,cd:1,spd:3,r:.28}};
 const ENEMIES={
- raccoon:{name:'小偷浣熊',hp:20,spd:1.6,dmg:4,cd:.8,gold:1,r:.35,aggro:2,throw:2.0},
- wolf:{name:'大灰狼',hp:46,spd:1.3,dmg:8,cd:1,gold:2,r:.45,aggro:2.6},
- bear:{name:'大笨熊',hp:170,spd:.8,dmg:20,cd:1.4,gold:6,r:.65,aggro:1.6,smash:1},
- boss:{name:'熊大王',hp:1000,spd:.7,dmg:34,cd:1.5,gold:30,r:.95,aggro:2,smash:1}};
+ raccoon:{name:'小偷浣熊',hp:22,spd:1.65,dmg:5,cd:.8,gold:1,r:.35,aggro:2,throw:2.0},
+ wolf:{name:'大灰狼',hp:48,spd:1.32,dmg:8,cd:1,gold:2,r:.45,aggro:2.6},
+ bear:{name:'大笨熊',hp:180,spd:.8,dmg:21,cd:1.4,gold:6,r:.65,aggro:1.6,smash:1},
+ boss:{name:'熊大王',hp:1100,spd:.7,dmg:36,cd:1.5,gold:30,r:.95,aggro:2,smash:1}};
 // 墙段几何：segs = [{x,y,len,v,gate}]，gate 为门洞半宽（0 表示没门）
 const WALL_HT=.4,GATE_W=1.15;
 function segsOf(s){return s.segs||[{x:s.x,y:s.y,len:s.len||5.4,v:!!s.v,gate:s.gate||0}]}
@@ -134,10 +145,10 @@ const ND_FIELDS=[['S','E'],['S','E','W'],['N','S','E','W'],['N','S','E','W'],['N
 const ND_SOUTH=[['S'],['S'],['S'],['S'],['S'],['S'],['S']];
 const MAPS={
  yard:{id:'yard',name:'胖宝的院子',ic:'🏡',desc:'围墙能连成一圈，四边路上各有一座城门',
-  w:34,h:34,gold:15,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1,ehp:1,edmg:1},nightsDir:ND_STD,
+  w:34,h:34,gold:15,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.02,ehp:1.02,edmg:1.02},nightsDir:ND_STD,
   terrain:plusTerr(17,17,34,34),spots:[...coreRing(),...coreBuildings()]},
  barbican:{id:'barbican',name:'瓮城',ic:'🏯',desc:'南门外加一圈瓮城，大门错开；西南菜园单独围起来',
-  w:34,h:34,gold:22,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.06,ehp:1.02,edmg:1.03},nightsDir:ND_STD,
+  w:34,h:34,gold:22,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.08,ehp:1.06,edmg:1.06},nightsDir:ND_STD,
   terrain:plusTerr(17,17,34,34),spots:[
    ...coreRing(),...coreBuildings().filter(s=>s.id!=='f3'),
    mkWall('wBW',11,25.85,5.7,1,0),mkWall('wBE',23,25.85,5.7,1,0),
@@ -147,7 +158,7 @@ const MAPS={
    {id:'f3',t:'farm',x:6.0,y:26}
   ]},
  garden:{id:'garden',name:'里外花园',ic:'🌸',desc:'里外两圈围墙，外门和内门错开，中间可以建塔',
-  w:34,h:34,gold:26,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.10,ehp:1.04,edmg:1.05},nightsDir:ND_STD,
+  w:34,h:34,gold:26,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.12,ehp:1.08,edmg:1.08},nightsDir:ND_STD,
   terrain:plusTerr(17,17,34,34),spots:[
    ...coreRingAt(12.2,12.2,21.8,21.8,'i'),
    ...coreRingAt(6.4,6.4,27.6,27.6,'o',{n:-3,s:3,w:-3,e:3}),
@@ -156,7 +167,7 @@ const MAPS={
    {id:'f1',t:'farm',x:9.3,y:9.3},{id:'f2',t:'farm',x:24.7,y:24.7},{id:'f3',t:'farm',x:24.7,y:9.3},{id:'f4',t:'farm',x:9.3,y:24.7}
   ]},
  bridge:{id:'bridge',name:'小石桥',ic:'🌉',desc:'一条小河隔在南边，三座石桥是必经之路，桥上可以建门',
-  w:34,h:34,gold:23,nights:7,home:{x:17,y:11.5,r:1.4},diff:{count:1.14,ehp:1.06,edmg:1.06},nightsDir:ND_BRIDGE,
+  w:34,h:34,gold:23,nights:7,home:{x:17,y:11.5,r:1.4},diff:{count:1.16,ehp:1.12,edmg:1.12},nightsDir:ND_BRIDGE,
   terrain:{clear:3.0,water:[R(0,19.2,34,3.6)],
    bridges:[R(7,18.7,2.6,4.6),R(15.7,18.7,2.6,4.6),R(24.4,18.7,2.6,4.6)],
    paths:[R(16,0,2,19.2),R(16,22.8,2,11.2),R(0,10.5,34,2),R(0,25.8,34,2),R(7,18.7,2.6,4.6),R(15.7,18.7,2.6,4.6),R(24.4,18.7,2.6,4.6)]},
@@ -168,7 +179,7 @@ const MAPS={
    {id:'f1',t:'farm',x:13.8,y:8.4},{id:'f2',t:'farm',x:17,y:26.6},{id:'f3',t:'farm',x:8.3,y:26.6}
   ]},
  fields:{id:'fields',name:'四面花田',ic:'🌼',desc:'四个角落的菜园各自围起来，敌人会从四面早点过来',
-  w:34,h:34,gold:22,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.22,ehp:1.12,edmg:1.1},nightsDir:ND_FIELDS,
+  w:34,h:34,gold:22,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.22,ehp:1.16,edmg:1.14},nightsDir:ND_FIELDS,
   terrain:plusTerr(17,17,34,34),spots:[
    ...coreRing(),
    ...farmPen('pA',7.2,7.2,17,17),...farmPen('pB',26.8,7.2,17,17),...farmPen('pC',7.2,26.8,17,17),...farmPen('pD',26.8,26.8,17,17),
@@ -176,7 +187,7 @@ const MAPS={
    {id:'bC',t:'cats',x:19.6,y:13.6},{id:'bD',t:'ducks',x:14.4,y:20.4}
   ]},
  mountain:{id:'mountain',name:'盘山公路',ic:'⛰️',desc:'悬崖盘道，胖宝住在山顶。沿路有好几道关卡，要一层一层守',
-  w:34,h:36,gold:24,nights:7,home:{x:17,y:5.0,r:1.4},diff:{count:1.38,ehp:1.4,edmg:1.2,spd:1.42},nightsDir:ND_SOUTH,
+  w:34,h:36,gold:24,nights:7,home:{x:17,y:5.0,r:1.4},diff:{count:1.36,ehp:1.40,edmg:1.22,spd:1.42},nightsDir:ND_SOUTH,
   terrain:{clear:2.6,
    walk:[
     R(11,2.2,12,7.3),            // 山顶平台
@@ -219,9 +230,9 @@ function refreshDirs(){DIRS={N:{x:HOME.x,y:-.5,cn:'北'},S:{x:HOME.x,y:MAP_H+.5,
 function useMap(id){MAP=MAPS[id]||MAPS.yard;MAP_W=MAP.w;MAP_H=MAP.h;HOME=MAP.home;SPOTS=MAP.spots;NIGHTS=MAP.nights||7;refreshDirs();return MAP}
 useMap('yard');
 function nightDirs(n){const a=(MAP&&MAP.nightsDir)||ND_STD;return a[Math.min(n,a.length)-1]||a[a.length-1]}
-function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5,m=(typeof G!=='undefined'&&G&&G.mods)||{};
- const add=(k,c0,t0=0,t1=dur)=>{const cnt=k==='boss'?c0:Math.round(c0*cm*1.15);for(let i=0;i<cnt;i++)out.push({t:t0+(t1-t0)*(cnt>1?i/(cnt-1):.5)+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
- add('raccoon',4+n*2);if(n>=2||m.earlyWolf)add('wolf',n>=2?n*2-1:2,4);if(n>=3)add('bear',n-2,8);
+function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5,m=(typeof G!=='undefined'&&G&&G.mods)||{},sp=m.espawn||1;
+ const add=(k,c0,t0=0,t1=dur)=>{const cnt=k==='boss'?c0:Math.round(c0*cm*1.18);for(let i=0;i<cnt;i++)out.push({t:(t0+(t1-t0)*(cnt>1?i/(cnt-1):.5))/sp+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
+ add('raccoon',5+n*2);if(n>=2||m.earlyWolf)add('wolf',n>=2?n*2-1:2,4);if(n>=3)add('bear',n-2,8);
  if(n===NIGHTS){const bt=dur*(m.bossEarly||.6);add('boss',1,bt,bt)}
  return out.sort((a,b)=>a.t-b.t)}
 // 下一级（或刚建造的 1 级）加成说明，给建造按钮用
@@ -240,25 +251,30 @@ function buffOwned(r,id,all){const b=BUFFS[id];if(!b)return false;if(all)return 
 function buffUnlocked(r,id,all){return condOk((BUFFS[id]||{}).unlock,r,all)}
 function debuffUnlocked(r,id,all){return condOk((DEBUFFS[id]||{}).unlock,r,all)}
 function makeMods(buffs,debuffs,diff){const B=new Set(buffs||[]),D=new Set(debuffs||[]),d=diff||{};
- return{gold:(B.has('piggy')?1.3:1)*(D.has('poor')?0.7:1),start:(B.has('piggy')?10:0)+(B.has('feast')?8:0),
-  pet:(B.has('pets')?1.35:1)*(D.has('thinpets')?0.75:1),hp:B.has('tough')?1.6:1,
-  stone:(B.has('stone')?1.5:1)*(D.has('leaky')?0.75:1),
-  ehp:(d.ehp||1)*(D.has('wolfy')?1.4:1)*(D.has('nightmare')?1.2:1),
-  edmg:(d.edmg||1)*(D.has('wolfy')?1.2:1),esmash:D.has('smash')?1.5:1,
+ return{gold:(B.has('piggy')?1.3:1)*(D.has('poor')?0.7:1),start:B.has('piggy')?10:0,
+  pet:(B.has('pets')?1.35:1)*(D.has('thinpets')?0.75:1),hp:B.has('tough')?1.5:1,
+  stone:(B.has('stone')?1.4:1)*(D.has('leaky')?0.75:1),
+  bhp:B.has('fortify')?1.4:1,bregen:B.has('mortar')?4:0,
+  ehp:(d.ehp||1)*(D.has('wolfy')?1.4:1)*(D.has('nightmare')?1.2:1)*(D.has('tanky')?1.3:1),
+  edmg:(d.edmg||1)*(D.has('wolfy')?1.2:1)*(D.has('fierce')?1.3:1),esmash:D.has('smash')?1.5:1,
   count:(d.count||1)*(D.has('wolfy')?1.25:1)*(D.has('late')?1.3:1)*(D.has('nightmare')?1.15:1),
-  drop:(D.has('poor')?0.7:1)*(B.has('feast')?1.2:1),
+  drop:D.has('poor')?0.7:1,
   espd:(d.spd||1)*(D.has('zoom')?1.25:1)*(D.has('nightmare')?1.15:1),
-  tdmg:(B.has('tower')?1.25:1),pdmg:(B.has('might')?1.2:1)*(D.has('storm')?0.8:1),
-  scd:(B.has('swift')?0.8:1)*(D.has('sluggish')?1.25:1),
-  wcut:B.has('cheapw')?1:0,farmPlus:B.has('harvest')?2:0,luck:B.has('luck')?1:0,
-  bcost:(B.has('thrift')?0.8:1)*(D.has('pricey')?1.25:1),interest:B.has('interest')?0.15:0,interestCap:B.has('interest')?8:0,refund:B.has('salvage')?0.6:0,
+  espawn:D.has('rush')?1.25:1,
+  tdmg:B.has('tower')?1.25:1,pdmg:(B.has('might')?1.2:1)*(D.has('storm')?0.8:1),
+  scd:(B.has('swift')?0.85:1)*(D.has('sluggish')?1.25:1),pacd:B.has('swift')?0.85:1,
+  wcut:0,farmPlus:B.has('harvest')?2:0,luck:B.has('luck')?1:0,
+  bounty:B.has('bounty')?1:0,payroll:B.has('payday')?2:0,
+  bcost:(B.has('thrift')?0.85:1)*(D.has('pricey')?1.25:1),interest:B.has('interest')?0.15:0,interestCap:B.has('interest')?8:0,refund:B.has('salvage')?0.6:0,
   beds:B.has('pals')?1:0,rev:(B.has('hatch')?0.7:1)*(D.has('latepups')?1.4:1),
-  earlyWolf:D.has('late')?1:0,bossHp:D.has('bossy')?1.5:1,bossEarly:D.has('bossy')?.4:.6,
+  earlyWolf:D.has('late')?1:0,bossHp:D.has('bossy')?1.5:1,bossEarly:D.has('bossy')?.4:.6,bearHp:D.has('bossy')?1.25:1,
   pspd:(B.has('stride')?1.2:1)*(D.has('sluggish')?0.8:1),
   pregen:B.has('recover')?1.5:1,phurt:D.has('frail')?1.3:1,
-  uspd:B.has('pack')?1.25:1,udmg:B.has('bite')?1.25:1,
+  uspd:(B.has('pack')?1.25:1)*(D.has('latepups')?0.8:1),udmg:B.has('bite')?1.15:1,
+  ucd:B.has('pack')?0.85:1,urange:B.has('sentry')?1.3:1,slow:B.has('bite')?1:0,
   trange:(B.has('longshot')?1.2:1)*(D.has('shortbow')?0.8:1),
-  trate:B.has('rapid')?0.8:1,prange:1}}
+  trate:(B.has('rapid')?0.8:1)*(D.has('misfire')?1.25:1),
+  prange:(B.has('claws')?1.25:1)*(D.has('shortarms')?0.8:1)}}
 function qualityStars(G){if(!G)return 0;const frac=G.home.max?G.home.hp/G.home.max:0;let q=1;if(frac>=.5)q=2;if(frac>=.8&&!(G.stats&&G.stats.broke))q=3;return q}
 function debuffStars(list){return (list||[]).reduce((s,id)=>s+((DEBUFFS[id]&&DEBUFFS[id].star)||0),0)}
 function rateStars(G){return Math.min(5,qualityStars(G)+debuffStars(G&&G.debuffs))}
@@ -266,7 +282,6 @@ function starRange(debuffs){const extra=debuffStars(debuffs);return{min:Math.min
 function normRec(r){r=r||{};r.best=r.best||0;r.wins=r.wins||0;r.maps=r.maps||{};r.starSpent=r.starSpent||0;r.buffs=r.buffs||[];
  if(r.wins>0&&!(r.maps.yard&&r.maps.yard.wins)){r.maps.yard={wins:r.wins,best:r.best||0}}
  for(const id of Object.keys(r.maps)){const m=r.maps[id];m.stars=m.stars||0;if(m.wins>0&&m.stars<1)m.stars=1}
- if(r.best>=3&&!r.buffs.includes('stone'))r.buffs.push('stone');
  return r}
 function mapCleared(r,id){return !!(r&&r.maps&&r.maps[id]&&r.maps[id].wins>0)}
 function mapUnlocked(r,id,all){if(all)return true;const i=MAP_ORDER.indexOf(id);return i<=0||mapCleared(r,MAP_ORDER[i-1])}

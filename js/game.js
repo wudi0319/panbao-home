@@ -12,7 +12,7 @@ function newGame(o){useMap(o.map||'yard');rebuildDecor();
  const raw=[...(o.buffs||[]),...(o.talents||[])],buffs=raw.filter(k=>BUFFS[k]),debuffs=[...(o.debuffs||[]),...raw.filter(k=>DEBUFFS[k])];
  const mods=makeMods(buffs,debuffs,MAP.diff);
  G={phase:'day',night:0,gold:(MAP.gold||15)+(mods.start||0),t:0,nightT:0,spawnQ:[],buffs,debuffs,talents:buffs,mods,map:MAP.id,
-  home:{hp:300*mods.stone,max:300*mods.stone,cd:0,hurtT:0,up:0,picks:[],bdmg:6,bcd:1.1,brange:4,regen:0,stipend:0,aura:1,beds:0,cozy:0},
+  home:{hp:300*mods.stone,max:300*mods.stone,cd:0,hurtT:0,up:0,picks:[],bdmg:5,bcd:1.2,brange:3.8,regen:0,stipend:0,aura:1,beds:0,cozy:0,guard:0},
   players:{},me:o.dog,b:{},enemies:[],units:[],shots:[],fx:[],floats:[],coins:[],
   input:{},army:{mode:'camp',leader:null,x:0,y:0},dark:0,shake:0,stats:{kills:0,broke:0,stars:0,starGain:0}};
  for(const s of SPOTS)G.b[s.id]={lv:0,hp:0,max:0,cd:0,dead:0};
@@ -22,7 +22,7 @@ function addPlayer(id,dog,weapon){const max=100*G.mods.hp;let x=HOME.x,y=HOME.y+
  G.players[id]={id,dog,weapon,x,y,dir:0,hp:max,max,cd:0,skillCd:0,dead:0,respawn:0,ph:0,moving:false,swing:0,face:{x:0,y:1}};G.input[id]={x:0,y:0}}
 const spotOf=id=>SPOTS.find(s=>s.id===id);
 const bStat=(s,k,lv)=>BUILD[s.t][k][lv-1];
-function bMax(s,lv){let h=bStat(s,'hp',lv);if(s.t==='wall')h*=G.mods.stone;return h}
+function bMax(s,lv){let h=bStat(s,'hp',lv);if(s.t==='wall')h*=G.mods.stone;else h*=(G.mods.bhp||1);return h}
 function priceOf(c){return Math.max(1,Math.round(c*(G.mods&&G.mods.bcost||1)))}
 function nextCost(s){const b=G.b[s.id];if(b.lv>=3)return null;let c=BUILD[s.t].cost[b.lv];if(s.t==='wall'&&G.mods.wcut)c=Math.max(2,c-G.mods.wcut);return priceOf(c)}
 function nearSpot(p){let best=null,bd=1.7;for(const s of SPOTS){const d=s.t==='wall'?Math.max(0,bDist(s,p.x,p.y)+WALL_HT+.15):Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}return best}
@@ -45,11 +45,11 @@ function homeUpChoices(){const taken=new Set(G.home.picks||[]),by={hero:[],unit:
  const cats=['hero','unit','build','econ'],out=cats.map(c=>take(by[c])).filter(Boolean),rest=cats.flatMap(c=>by[c]);
  while(out.length<3&&rest.length)out.push(take(rest));return out}
 function applyHomeUp(id){const U=HOME_UPS[id];if(!U||!G)return false;
- if(id==='thick'){G.home.max+=80;G.home.hp=G.home.max}
+ if(id==='thick'){G.home.max+=60;G.home.hp=G.home.max}
  else if(id==='bottle'){G.home.bdmg=(G.home.bdmg||6)+5;G.home.bcd=Math.max(.55,(G.home.bcd||1.1)-.25);G.home.brange=(G.home.brange||4)+1.2}
  else if(id==='stipend')G.home.stipend=(G.home.stipend||0)+4;
- else if(id==='regen')G.home.regen=(G.home.regen||0)+2.5;
- else if(id==='aura')G.home.aura=(G.home.aura||1)*1.25;
+ else if(id==='regen')G.home.regen=(G.home.regen||0)+2;
+ else if(id==='aura'){G.home.aura=(G.home.aura||1)*1.25;G.home.guard=Math.min(.35,(G.home.guard||0)+.15)}
  else if(id==='beds'){G.home.beds=(G.home.beds||0)+1;syncUnits()}
  else if(id==='cozy')G.home.cozy=Math.min(.4,(G.home.cozy||0)+.22);
  else if(id==='recall')G.home.rev=Math.min(.45,(G.home.rev||0)+.25);
@@ -60,6 +60,8 @@ function applyHomeUp(id){const U=HOME_UPS[id];if(!U||!G)return false;
  else if(id==='scope'){G.mods.trange=(G.mods.trange||1)*1.15;G.mods.tdmg=(G.mods.tdmg||1)*1.1}
  else if(id==='banker'){G.mods.interest=(G.mods.interest||0)+.10;G.mods.interestCap=(G.mods.interestCap||0)+6}
  else if(id==='bargain')G.mods.bcost=(G.mods.bcost||1)*0.85
+ else if(id==='stretch')G.mods.prange=(G.mods.prange||1)*1.2
+ else if(id==='pelt'){G.mods.pet=(G.mods.pet||1)*1.3;syncUnits();for(const u of G.units)if(!u.dead)u.hp=Math.min(u.max,u.hp*1.3)}
  G.home.picks.push(id);G.home.up++;G.fx.push({k:'puff',x:HOME.x,y:HOME.y,t:0,life:.6});sfx('build');hooks.toast('🏠 '+U.ic+' '+U.name+'！');return true}
 function upgradeHome(pid,id){if(G.phase!=='day')return false;const p=G.players[pid];if(!p||p.dead||!nearHome(p))return false;
  const c=homeUpCost();if(c==null){hooks.toast('老家这局已经升满啦');return false}
@@ -70,7 +72,8 @@ function startNight(){if(G.phase!=='day')return;G.phase='night';G.nightT=0;G.spa
  hooks.toast('🌙 第 '+(G.night+1)+' 夜，敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来了！')}
 function morning(){G.night++;G.phase='day';G.coins=[];
  if(G.night>=NIGHTS){G.phase='win';endGame(true);return}
- let pay=4+(G.home.stipend||0);for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)+(G.mods.farmPlus||0)}
+ let pay=4+(G.home.stipend||0);for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)+(G.mods.farmPlus||0)
+  else if(G.mods.payroll&&(s.t==='tower'||s.t==='cats'||s.t==='ducks')&&b.lv&&!b.dead)pay+=G.mods.payroll}
  pay=Math.round(pay*G.mods.gold);const interest=G.mods.interest?Math.min(G.mods.interestCap||8,Math.floor(G.gold*G.mods.interest)):0;G.gold+=pay+interest;
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}navDirty=1;
  G.home.hp=G.home.max;for(const p of Object.values(G.players)){p.hp=p.max;p.dead=0;p.swing=0;p.skillT=0;p.cd=0}
@@ -92,8 +95,9 @@ function armyDeploy(pid){if(!G.units.length){hooks.toast('先建小猫营或小�
 function toggleArmy(pid){G.army.mode==='follow'?armyDeploy(pid):armyFollow(pid)}
 // ---- 战斗 ----
 function hurtEnemy(e,d,stun,byP){if(e.dead)return;e.hp-=d;e.flash=.12;if(stun)e.stun=Math.max(e.stun||0,stun);
- if(byP){sfx('hit');const me=G.players[G.me];if(me)me.combat=G.t;if(G.floats.length<70)G.floats.push({x:e.x+(Math.random()-.5)*.4,y:e.y-ENEMIES[e.k].r*2-.3,txt:''+Math.round(d),t:.25,col:'#fff',sm:1})}
- if(e.hp<=0){e.dead=1;const g=Math.round(ENEMIES[e.k].gold*G.mods.drop)+(G.mods.luck||0);G.gold+=g;G.stats.kills++;sfx('kill');G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.coins.push({x:e.x,y:e.y-.4,t:0,n:g});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
+ if(byP===1){sfx('hit');const me=G.players[G.me];if(me)me.combat=G.t;if(G.floats.length<70)G.floats.push({x:e.x+(Math.random()-.5)*.4,y:e.y-ENEMIES[e.k].r*2-.3,txt:''+Math.round(d),t:.25,col:'#fff',sm:1})}
+ if(byP==='u'&&G.mods.slow)e.slowT=Math.max(e.slowT||0,1.2);
+ if(e.hp<=0){e.dead=1;let g=Math.round(ENEMIES[e.k].gold*G.mods.drop)+(G.mods.luck||0);if(G.mods.bounty&&(e.k==='bear'||e.k==='boss'))g+=Math.round(ENEMIES[e.k].gold*(G.mods.drop||1));G.gold+=g;G.stats.kills++;sfx('kill');G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.coins.push({x:e.x,y:e.y-.4,t:0,n:g});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
 function enemiesNear(x,y,r){return G.enemies.filter(e=>!e.dead&&Math.hypot(e.x-x,e.y-y)<=r+ENEMIES[e.k].r)}
 function nearestEnemy(x,y,r){let best=null,bd=1e9;for(const e of G.enemies){if(e.dead)continue;const d=Math.hypot(e.x-x,e.y-y)-ENEMIES[e.k].r;if(d<=r&&d<bd){bd=d;best=e}}return best}
 function shoot(from,tgt,dmg,kind,spd=10,byP){G.shots.push({x:from.x,y:from.y-.5,tgt,tx:tgt.x,ty:tgt.y,dmg,kind,spd,t:0,byP})}
@@ -106,7 +110,7 @@ function faceAng(p){if(p.face&&(Math.abs(p.face.x)+Math.abs(p.face.y))>1e-6)retu
 function inFan(p,e,range){const dx=e.x-p.x,dy=e.y-p.y,d=Math.hypot(dx,dy),er=(ENEMIES[e.k]&&ENEMIES[e.k].r)||.35;if(d>range+er)return false;if(d<.12)return true;
  let da=Math.atan2(dy,dx)-faceAng(p);while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;return Math.abs(da)<=Math.PI/2+1e-4}
 function playerAttack(p,dt){const W=WEAPONS[p.weapon];p.cd-=dt;p.skillCd=Math.max(0,p.skillCd-dt);if(p.cd>0)return;
- const range=W.range*(G.mods.prange||1),tg=nearestEnemy(p.x,p.y,range);if(!tg)return;p.cd=W.cd;p.swing=.3;p.combat=G.t;p.face={x:tg.x-p.x,y:tg.y-p.y};
+ const range=W.range*(G.mods.prange||1),tg=nearestEnemy(p.x,p.y,range);if(!tg)return;p.cd=W.cd*(G.mods.pacd||1);p.swing=.3;p.combat=G.t;p.face={x:tg.x-p.x,y:tg.y-p.y};
  if(W.kind==='melee'){const ang=Math.atan2(tg.y-p.y,tg.x-p.x);enemiesNear(p.x,p.y,range).forEach(e=>{if(!inFan(p,e,range))return;hurtEnemy(e,W.dmg*(G.mods.pdmg||1),0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'fan',x:p.x,y:p.y,a:ang,t:0,life:.3,r:range,w:p.weapon})}
  else if(W.kind==='ranged')shoot(p,tg,W.dmg*(G.mods.pdmg||1),'frisbee',11,1);
  else{enemiesNear(p.x,p.y,range).forEach(e=>hurtEnemy(e,W.dmg*(G.mods.pdmg||1),.3,1));G.shake=Math.max(G.shake,.12);G.fx.push({k:'slam',x:p.x,y:p.y,t:0,life:.35,r:range});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:Math.min(range,1.8),w:p.weapon})}}
@@ -161,14 +165,14 @@ function dealTo(tg,d,src){if(!liveTg(tg))return;const x=(src&&src.x)||0,y=(src&&
  if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1;flashHit(tg,x,y,0);sfx('home')}
  else if(tg.kind==='b'){const b=G.b[tg.s.id];if(!b||b.dead)return;if(tg.s.t==='wall'){const lv=b.lv||1,ar=(BUILD.wall.armor||[])[lv-1]||0;d*=1-ar}b.hp-=d;b.flash=.2;flashHit(tg,x,y,0);
   if(b.hp<=0){b.hp=0;b.dead=1;navDirty=1;G.stats.broke=(G.stats.broke||0)+1;hooks.toast(bName(tg.s)+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
- else{const o=tg.o;o.hp-=d;o.flash=.18;if(tg.kind==='p'){sfx('hurt');o.combat=G.t}if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?6:unitRespawn(o.home);if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 6 秒后回家复活')}}}
-function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'||tg.kind==='b')d*=(G.mods.esmash||1);if(tg.kind==='p')d*=(G.mods.phurt||1);
+ else{const o=tg.o;o.hp-=d;o.flash=.18;if(tg.kind==='p'){sfx('hurt');o.combat=G.t}if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?8:unitRespawn(o.home);if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 8 秒后回家复活')}}}
+function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'||tg.kind==='b')d*=(G.mods.esmash||1);if(tg.kind==='p')d*=(G.mods.phurt||1);if(tg.kind==='u'&&G.home.guard&&tg.o&&Math.hypot(tg.o.x-HOME.x,tg.o.y-HOME.y)<4.6)d*=1-G.home.guard;
  if(tg.kind==='b'&&tg.s&&tg.s.t==='wall'){const lv=(G.b[tg.s.id]||{}).lv||1,ar=(BUILD.wall.armor||[])[lv-1]||0;d*=1-ar}
  const hx=tg.kind==='b'?tg.s.x:tg.kind==='home'?HOME.x:(tg.o&&tg.o.x)||e.x,hy=tg.kind==='b'?tg.s.y:tg.kind==='home'?HOME.y:(tg.o&&tg.o.y)||e.y;
  flashHit(tg,(hx+e.x)/2,(hy+e.y)/2,ENEMIES[e.k]&&ENEMIES[e.k].smash);
  if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1;G.shake=Math.max(G.shake,.15);sfx('home')}
  else if(tg.kind==='b'){const b=G.b[tg.s.id];b.hp-=d;if(b.hp<=0){b.hp=0;b.dead=1;navDirty=1;G.stats.broke=(G.stats.broke||0)+1;hooks.toast(bName(tg.s)+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
- else{const o=tg.o;o.hp-=d;o.flash=.18;if(tg.kind==='p'){sfx('hurt');o.combat=G.t}if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?6:unitRespawn(o.home);if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 6 秒后回家复活')}}}
+ else{const o=tg.o;o.hp-=d;o.flash=.18;if(tg.kind==='p'){sfx('hurt');o.combat=G.t}if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?8:unitRespawn(o.home);if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 8 秒后回家复活')}}}
 function aimOf(tg,e){if(!tg)return{x:e.x,y:e.y,r:0};if(tg.kind==='p'||tg.kind==='u')return{x:tg.o.x,y:tg.o.y,r:.3};if(tg.kind==='b'){const q=bNear(tg.s,e.x,e.y);return{x:q.x,y:q.y,r:tg.s.t==='wall'?0:.75}}return{x:HOME.x,y:HOME.y,r:HOME.r}}
 function liveTg(tg){if(!tg)return false;if(tg.kind==='b')return G.b[tg.s.id]&&!G.b[tg.s.id].dead;if(tg.kind==='home')return G.home.hp>0;return tg.o&&!tg.o.dead}
 function startAtk(e,tg){const E=ENEMIES[e.k];e.wind=E.smash?(e.k==='boss'?.42:.32):(E.throw?.22:.16);e.windMax=e.wind;e.atk=0;e.cd=E.cd;e.atkTg=tg;const a=aimOf(tg,e);e.atkA=Math.atan2(a.y-e.y,a.x-e.x);if(Math.abs(a.x-e.x)>.05)e.dir=a.x<e.x?2:3}
@@ -195,7 +199,7 @@ function stepEnemy(e,dt){const E=ENEMIES[e.k];e.cd-=dt;e.flash=Math.max(0,(e.fla
  // 出手距离看真正的目标（家/人/建筑），不能看寻路格子，否则会在地图边上对空挥砸/扔石头
  const aa=aimOf(tg,e),dAtk=Math.hypot(aa.x-e.x,aa.y-e.y),reach=E.throw||(E.r+aa.r+.15);
  if(tg&&dAtk<=reach){if(e.cd<=0)startAtk(e,tg);return}
- let sp=E.spd*(G.mods.espd||1)*dt;if(G.home.cozy&&Math.hypot(e.x-HOME.x,e.y-HOME.y)<4.2)sp*=1-G.home.cozy;
+ let sp=E.spd*(G.mods.espd||1)*dt;if(e.slowT>0){e.slowT-=dt;sp*=.65}if(G.home.cozy&&Math.hypot(e.x-HOME.x,e.y-HOME.y)<4.2)sp*=1-G.home.cozy;
  const nx=e.x+dx/d*sp,ny=e.y+dy/d*sp,bl=blocker(e,nx,ny);
  if(bl){if(e.cd<=0)startAtk(e,{kind:'b',s:bl});return}
  if(terrainBlock(nx,ny,E.r)){const ax=e.x+dx/d*sp,ay=e.y,bx=e.x,by=e.y+dy/d*sp;
@@ -209,9 +213,9 @@ function unitAnchor(u){const A=G.army,L=A.leader&&G.players[A.leader];
 function stepUnit(u,dt){const U=UNITS[u.k],s=spotOf(u.home),b=G.b[s.id];u.flash=Math.max(0,(u.flash||0)-dt);
  if(u.dead){if(G.phase==='night'&&!b.dead){u.respawn-=dt;if(u.respawn<=0){u.dead=0;u.hp=u.max;u.x=s.x;u.y=s.y+.6}}return}
  u.cd-=dt;const an=unitAnchor(u);let goal=an,tg=null;
- if(G.phase==='night'){tg=nearestEnemy(u.x,u.y,3.4);if(tg&&dist(tg,an)>5.5)tg=null}
- const dmg=U.dmg*G.mods.pet*(G.mods.udmg||1)*(1+.3*(b.lv-1))*(G.home.aura>1&&Math.hypot(u.x-HOME.x,u.y-HOME.y)<4.6?G.home.aura:1);
- if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=U.range){u.moving=false;if(u.cd<=0){u.cd=U.cd*(G.mods.ucd||1);u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9);else hurtEnemy(tg,dmg)}u.dir=tg.x<u.x?2:3;return}goal=tg}
+ if(G.phase==='night'){tg=nearestEnemy(u.x,u.y,3.4*(G.mods.urange||1));if(tg&&dist(tg,an)>5.5*(G.mods.urange||1))tg=null}
+ const dmg=U.dmg*G.mods.pet*(G.mods.udmg||1)*(1+.3*(b.lv-1))*(G.home.aura>1&&Math.hypot(u.x-HOME.x,u.y-HOME.y)<4.6?G.home.aura:1),rng=U.range*(G.mods.urange||1);
+ if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=rng){u.moving=false;if(u.cd<=0){u.cd=U.cd*(G.mods.ucd||1);u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9,'u');else hurtEnemy(tg,dmg,0,'u')}u.dir=tg.x<u.x?2:3;return}goal=tg}
  const dx=goal.x-u.x,dy=goal.y-u.y,d=Math.hypot(dx,dy);if(d<.15){u.moving=false;u.path=null;return}
  const sp=Math.min(d,U.spd*(G.mods.uspd||1)*dt*(d>3?1.4:1));let vx=dx/d,vy=dy/d;
  if(!lineClear(u.x,u.y,u.x+vx*Math.min(.8,d),u.y+vy*Math.min(.8,d),.26,0)){u.pathT=(u.pathT||0)-dt;if(!u.path||u.pathT<=0){u.path=astar(u.x,u.y,goal.x,goal.y,1);u.pathT=.45}
@@ -225,7 +229,7 @@ function slideAround(p,inp,sp){let best=null,bd=1.4;for(const s of SPOTS){const 
 function stepPlayer(p,dt){const inp=G.input[p.id]||{x:0,y:0};p.flash=Math.max(0,(p.flash||0)-dt);p.swing=Math.max(0,p.swing-dt);p.skillT=Math.max(0,(p.skillT||0)-dt);
  if(p.dead){p.respawn-=dt;if(p.respawn<=0){p.dead=0;p.hp=p.max;p.x=HOME.x;p.y=HOME.y+2}return}
  p.healFx=Math.max(0,(p.healFx||0)-dt);
- if(G.phase==='night'&&p.hp<p.max&&(G.t-(p.combat||0))>=4){p.hp=Math.min(p.max,p.hp+8*(G.mods.pregen||1)*dt);p.healFx=.35;p.healAcc=(p.healAcc||0)+dt;if(p.healAcc>.4){p.healAcc=0;G.fx.push({k:'heal',x:p.x+(Math.random()-.5)*.3,y:p.y-.4,t:0,life:.55})}}
+ if(G.phase==='night'&&p.hp<p.max&&(G.t-(p.combat||0))>=4){p.hp=Math.min(p.max,p.hp+4*(G.mods.pregen||1)*dt);p.healFx=.35;p.healAcc=(p.healAcc||0)+dt;if(p.healAcc>.4){p.healAcc=0;G.fx.push({k:'heal',x:p.x+(Math.random()-.5)*.3,y:p.y-.4,t:0,life:.55})}}
  const m=Math.hypot(inp.x,inp.y),ox=p.x,oy=p.y;p.moving=m>.1;
  if(p.moving){const sp=4.2*(G.mods.pspd||1)*dt*Math.min(1,m),inside=solidAt(p.x,p.y,.3);const nx=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);if(inside||!solidAt(nx,p.y,.3))p.x=nx;const ny=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);if(inside||!solidAt(p.x,ny,.3))p.y=ny;p.ph+=dt*11;
   if(!inside&&Math.hypot(p.x-ox,p.y-oy)<sp*.35)slideAround(p,inp,sp);
@@ -285,9 +289,9 @@ function panbaoPawWorld(){const im=babyImg.idle0,L=panbaoLayout(im),p=panbaoPose
 
 function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark+=((G.phase==='night'?1:0)-G.dark)*Math.min(1,dt*1.5);
  for(const p of Object.values(G.players))stepPlayer(p,dt);
- if(G.phase==='night'){if(navDirty)rebuildNav();G.nightT+=dt;const n=G.night+1,mul=(1+.16*(n-1))*G.mods.ehp;
+ if(G.phase==='night'){if(navDirty)rebuildNav();G.nightT+=dt;const n=G.night+1,mul=(1+.18*(n-1))*G.mods.ehp;
   while(G.spawnQ.length&&G.spawnQ[0].t<=G.nightT){const q=G.spawnQ.shift(),E=ENEMIES[q.k],p=spawnAt(q.dir);
-   const hp=E.hp*mul*(q.k==='boss'&&G.mods.bossHp||1);G.enemies.push({id:uid++,k:q.k,x:p.x,y:p.y,hp,max:hp,cd:0,rt:0,dir:2,ph:Math.random()*6,moving:true})}
+   const hp=E.hp*mul*(q.k==='boss'?(G.mods.bossHp||1):1)*(q.k==='bear'?(G.mods.bearHp||1):1);G.enemies.push({id:uid++,k:q.k,x:p.x,y:p.y,hp,max:hp,cd:0,rt:0,dir:2,ph:Math.random()*6,moving:true})}
   for(const e of G.enemies)if(!e.dead)stepEnemy(e,dt);
   // 互相挤开
   const es=G.enemies;for(let i=0;i<es.length;i++)for(let k=i+1;k<es.length;k++){const a=es[i],b=es[k],rr=ENEMIES[a.k].r+ENEMIES[b.k].r,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d>0&&d<rr){const o=(rr-d)/2*.5;a.x-=dx/d*o;a.y-=dy/d*o;b.x+=dx/d*o;b.y+=dy/d*o}}for(const e of es)if(!e.dead)pushOut(e,ENEMIES[e.k].r,1);
@@ -302,6 +306,7 @@ function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark
   if(G.home.cd<=0&&(G.home.throwT||0)<=0){const tg=nearestEnemy(HOME.x,HOME.y,G.home.brange||4);if(tg){G.home.cd=G.home.bcd||1.1;G.home.throwT=THROW_MAX;G.home.throwMax=THROW_MAX;G.home.threw=0;G.home.throwTg=tg;G.home.throwA=Math.atan2((tg.y-(HOME.y+1.6)),tg.x-HOME.x)}}
   if(G.home.hp<=0){G.home.hp=0;G.phase='lose';endGame(false)}}
  G.home.hurtT=Math.max(0,G.home.hurtT-dt);if(G.home.regen&&G.home.hp>0)G.home.hp=Math.min(G.home.max,G.home.hp+G.home.regen*dt);
+ if(G.phase==='night'&&G.mods.bregen)for(const s of SPOTS){const b=G.b[s.id];if(b.lv&&!b.dead&&b.hp<b.max)b.hp=Math.min(b.max,b.hp+G.mods.bregen*dt)}
  for(const s of SPOTS){const b=G.b[s.id];if(b&&b.flash)b.flash=Math.max(0,b.flash-dt)}
  for(const u of G.units)stepUnit(u,dt);
  // 子弹
