@@ -1,22 +1,22 @@
 // 保卫胖宝 — 界面：开始选择、HUD、按钮、摇杆和键盘
 const $=id=>document.getElementById(id);
 const sel={dog:'yellow',weapon:'spatula',buffs:[],debuffs:[],map:'yard',cat:'hero'};
-const allOn=()=>$('unlockAll').checked;
-const unlocked=(u,r)=>allOn()||!u||(u==='win'?r.wins>0:u==='n3'?r.best>=3:true);
+try{['unlockAll','panbao-unlock-all','panbao-unlockAll','panbao-all-unlock'].forEach(k=>localStorage.removeItem(k))}catch(e){}
+const unlocked=(u,r)=>!u||(u==='win'?r.wins>0:u==='n3'?r.best>=3:true);
 const unlockText=u=>u==='win'?'通关后解锁':'守过第 3 夜解锁';
 function drawDogIcons(){document.querySelectorAll('#pickDog canvas').forEach(c=>{const x=c.getContext('2d');x.clearRect(0,0,96,96);x.save();x.scale(96,96);S.puppy(x,0,0,false,c.parentNode.dataset.dog);x.restore()})}
-function renderStart(){const r=Game.loadRec(),all=allOn();
+function renderStart(){const r=Game.loadRec();
  $('pickWeapon').innerHTML=Object.entries(WEAPONS).map(([k,w])=>{const ok=unlocked(w.unlock,r);if(!ok&&sel.weapon===k)sel.weapon='spatula';
   return`<button data-w="${k}" class="${sel.weapon===k?'on':''} ${ok?'':'lock'}">${w.ic} ${w.name}<small>${ok?w.desc:'🔒 '+unlockText(w.unlock)}</small></button>`}).join('');
- if(!mapUnlocked(r,sel.map,all))sel.map='yard';
- $('pickMap').innerHTML=MAP_ORDER.map(id=>{const m=MAPS[id],ok=mapUnlocked(r,id,all),cleared=mapCleared(r,id),n=MAP_ORDER.indexOf(id)+1,st=(r.maps[id]&&r.maps[id].stars)||0;
+ if(!mapUnlocked(r,sel.map,false))sel.map='yard';
+ $('pickMap').innerHTML=MAP_ORDER.map(id=>{const m=MAPS[id],ok=mapUnlocked(r,id,false),cleared=mapCleared(r,id),n=MAP_ORDER.indexOf(id)+1,st=(r.maps[id]&&r.maps[id].stars)||0;
   const mark=!ok?'🔒 先通关上一关':st?starBar(st):('第 '+n+' 关');
   return`<button data-map="${m.id}" class="${sel.map===m.id?'on':''} ${ok?'':'lock'} ${cleared?'cleared':''}">${m.ic} ${m.name}<small class="stars">${mark}</small></button>`}).join('');
  const sm=MAPS[sel.map];$('mapDesc').textContent=sm?(sm.ic+' '+sm.desc):'';
  document.querySelectorAll('#pickDog button').forEach(b=>b.classList.toggle('on',b.dataset.dog===sel.dog));
  const nClear=MAP_ORDER.filter(id=>mapCleared(r,id)).length,tot=starTotal(r),bag=starSpendable(r);
  $('rec').textContent=(r.best||r.wins||tot)?`⭐ 累计 ${tot} 星 · 还可花 ${bag} · 通关 ${r.wins} 次 · 已过 ${nClear}/${MAP_ORDER.length} 关`:'';drawDogIcons()}
-function renderPrep(){const r=Game.loadRec(),all=allOn(),sm=MAPS[sel.map];
+function renderPrep(){const r=Game.loadRec(),sm=MAPS[sel.map];
  $('prepTitle').textContent='准备出发';
  $('prepMap').textContent=sm?(sm.ic+' '+sm.name+' · '+sm.desc):'';
  $('prepStars').textContent='⭐ 累计 '+starTotal(r)+' 星 · 还可花 '+starSpendable(r);
@@ -24,17 +24,17 @@ function renderPrep(){const r=Game.loadRec(),all=allOn(),sm=MAPS[sel.map];
  $('prepTabs').innerHTML=Object.entries(CATS).map(([k,c])=>{
   const nb=sel.buffs.filter(id=>(BUFFS[id]&&BUFFS[id].cat)===k).length,nd=sel.debuffs.filter(id=>(DEBUFFS[id]&&DEBUFFS[id].cat)===k).length,mark=(nb||nd)?' · '+(nb?nb+'加':'')+(nb&&nd?'/':'')+(nd?nd+'挑':''):'';
   return`<button data-cat="${k}" class="${sel.cat===k?'on':''}">${c.ic} ${c.name}${mark}</button>`}).join('');
- sel.buffs=sel.buffs.filter(k=>buffOwned(r,k,all));
- sel.debuffs=sel.debuffs.filter(k=>debuffUnlocked(r,k,all));
+ sel.buffs=sel.buffs.filter(k=>buffOwned(r,k,false));
+ sel.debuffs=sel.debuffs.filter(k=>debuffUnlocked(r,k,false));
  const buffs=Object.entries(BUFFS).filter(([,b])=>(b.cat||'build')===sel.cat);
  const debs=Object.entries(DEBUFFS).filter(([,d])=>(d.cat||'enemy')===sel.cat);
  $('pickBuff').innerHTML=buffs.length?buffs.map(([k,b])=>{
-  const un=buffUnlocked(r,k,all),own=buffOwned(r,k,all),on=sel.buffs.includes(k),c=b.cost||0;
+  const un=buffUnlocked(r,k,false),own=buffOwned(r,k,false),on=sel.buffs.includes(k),c=b.cost||0;
   if(!un)return`<button data-b="${k}" class="lock">${b.ic} ${b.name}<small>🔒 ${condText(b.unlock)}</small></button>`;
   if(!own)return`<button data-b="${k}" class="buy">${b.ic} ${b.name}<small>兑换 ${c} 星 · ${b.desc}</small></button>`;
   return`<button data-b="${k}" class="${on?'on':''}">${b.ic} ${b.name}<small>${b.desc}</small></button>`}).join(''):'<p class="cat-empty">这一类没有出发前加成，看看旁边的挑战吧</p>';
  $('pickDebuff').innerHTML=debs.length?debs.map(([k,d])=>{
-  const un=debuffUnlocked(r,k,all),on=sel.debuffs.includes(k);
+  const un=debuffUnlocked(r,k,false),on=sel.debuffs.includes(k);
   if(!un)return`<button data-d="${k}" class="lock">${d.ic} ${d.name}<small>🔒 ${condText(d.unlock)}</small></button>`;
   return`<button data-d="${k}" class="${on?'on':''}">${d.ic} ${d.name}<small>+${d.star} 星 · ${d.desc}</small></button>`}).join(''):'<p class="cat-empty">这一类没有挑战</p>';
  const rg=starRange(sel.debuffs);
@@ -49,12 +49,11 @@ function startRun(){Game.newGame({dog:sel.dog,weapon:sel.weapon,map:sel.map,buff
 $('pickDog').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel.dog=b.dataset.dog;renderStart()};
 $('pickWeapon').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.weapon=b.dataset.w;renderStart()};
 $('pickMap').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');sel.map=b.dataset.map;renderStart()};
-$('unlockAll').onchange=()=>{renderStart();if(!$('prep').classList.contains('hidden'))renderPrep()};
 $('goBtn').onclick=()=>{SFX.play('click');openPrep()};
 $('prepBack').onclick=()=>{SFX.play('click');closePrep()};
 $('prepGo').onclick=()=>startRun();
 $('prepTabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel.cat=b.dataset.cat;SFX.play('click');renderPrep()};
-$('pickBuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.b,r=Game.loadRec(),all=allOn();
+$('pickBuff').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.b,r=Game.loadRec();
  if(b.classList.contains('lock'))return toast(condText(BUFFS[k].unlock)||'还没解锁哦');
  if(b.classList.contains('buy')){if(starSpendable(r)<(BUFFS[k].cost||0))return toast('星星不够，再去通关攒一点吧');Game.saveRec(buyBuff(r,k));toast('兑换了 '+BUFFS[k].ic+' '+BUFFS[k].name+'！');if(sel.buffs.length<BUFF_MAX&&!sel.buffs.includes(k))sel.buffs.push(k);renderPrep();return}
  const i=sel.buffs.indexOf(k);if(i>=0)sel.buffs.splice(i,1);else{if(sel.buffs.length>=BUFF_MAX){toast('最多带 '+BUFF_MAX+' 个加成');return}sel.buffs.push(k)}renderPrep()};
