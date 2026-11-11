@@ -31,7 +31,7 @@ const tap=(id,fn)=>$(id).addEventListener('click',e=>{e.preventDefault();fn()});
 tap('buildBtn',()=>{const p=me();if(p&&Game.build(p.id))tut.on('build')});
 tap('nightBtn',()=>{Game.startNight();tut.on('night')});
 tap('skillBtn',()=>{const p=me();if(p&&p.skillCd<=0&&Game.skill(p.id))tut.on('skill')});
-tap('armyBtn',()=>{const p=me();if(p)Game.toggleArmy(p.id);SFX.play('click')});
+tap('followBtn',()=>{const p=me();if(p)Game.armyFollow(p.id)});tap('deployBtn',()=>{const p=me();if(p)Game.armyDeploy(p.id)});
 // ---- 暂停 / 音效 ----
 let paused=false;
 function setPause(v){const G=Game.G;if(!G||!$('start').classList.contains('hidden')||G.phase==='win'||G.phase==='lose')v=false;paused=v;$('pause').classList.toggle('hidden',!v);jv={x:0,y:0};knob.style.transform='';keys.clear()}
@@ -49,13 +49,14 @@ function joyStart(e,float){if(jid!==null||paused)return;jid=e.pointerId;if(float
  try{(float?$('map'):joy).setPointerCapture(jid)}catch(_){}joyMove(e)}
 const joyEnd=e=>{if(e.pointerId!==jid)return;jid=null;jv={x:0,y:0};knob.style.transform='';joy.classList.remove('float');joy.style.left=joy.style.top=joy.style.bottom=''};
 joy.addEventListener('pointerdown',e=>{e.preventDefault();joyStart(e,false)});
-$('map').addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.5&&e.clientY>gview().top+10)joyStart(e,true)});
+$('map').addEventListener('pointerdown',e=>{const m=Game.view.mm;if(Game.G&&e.clientX>=m.x-4&&e.clientX<=m.x+m.s+4&&e.clientY>=m.y-4&&e.clientY<=m.y+m.s+4){m.big=!m.big;SFX.play('click');return}
+ if(e.clientX<innerWidth*.5&&e.clientY>gview().top+10)joyStart(e,true)});
 for(const el of[joy,$('map')]){el.addEventListener('pointermove',e=>{if(e.pointerId===jid)joyMove(e)});el.addEventListener('pointerup',joyEnd);el.addEventListener('pointercancel',joyEnd)}
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='p'||k==='escape'){if(!e.repeat)setPause(!paused);return}if(paused)return;keys.add(k);if(e.repeat)return;
  if(['w','a','s','d','arrowleft','arrowright','arrowup','arrowdown'].includes(k))tut.on('move');
  if(k==='e'||k==='enter')$('buildBtn').classList.contains('hidden')||$('buildBtn').click();
  if(k===' '){e.preventDefault();$('skillBtn').classList.contains('hidden')||$('skillBtn').click()}
- if(k==='n')$('nightBtn').classList.contains('hidden')||$('nightBtn').click();if(k==='f')$('armyBtn').classList.contains('hidden')||$('armyBtn').click()});
+ if(k==='n')$('nightBtn').classList.contains('hidden')||$('nightBtn').click();if(k==='f'){const p=me();if(p&&Game.G.units.length)Game.toggleArmy(p.id)}});
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));addEventListener('blur',()=>keys.clear());
 function readInput(){let x=jv.x,y=jv.y;if(keys.has('a')||keys.has('arrowleft'))x-=1;if(keys.has('d')||keys.has('arrowright'))x+=1;if(keys.has('w')||keys.has('arrowup'))y-=1;if(keys.has('s')||keys.has('arrowdown'))y+=1;
  const m=Math.hypot(x,y);return m>1?{x:x/m,y:y/m}:{x,y}}
@@ -64,9 +65,10 @@ const TUT_KEY='panbao-tut-v1';
 const tut={step:-1,start(){this.step=localStorage.getItem(TUT_KEY)?-1:0;if(this.step<0)toast('天亮了，走到虚线框旁边建造，保护胖宝！')},
  on(ev){const need=['move','build','night','skill'][this.step];if(ev!==need)return;this.step++;if(this.step>=4){this.step=-1;localStorage.setItem(TUT_KEY,'1');toast('👍 学会啦！守住 7 个晚上就赢')}},
  text(G){if(this.step<0)return'';if(this.step===2&&G.phase==='night')this.step=3;if(this.step===3&&G.phase==='day'){this.step=-1;localStorage.setItem(TUT_KEY,'1');return''}
-  return['👈 按住屏幕左边拖动，就能走路','走到闪光的虚线框旁边，点右下角「建造」','建好了！准备好就点「🌙 开始入夜」','敌人来了！靠近会自动打，点「'+WEAPONS[me().weapon].skill.name+'」放大招'][this.step]}};
+  return['👈 按住屏幕左边拖动，就能走路（左上角是小地图）','走到闪光的虚线框旁边，点右下角「建造」','建好了！准备好就点「🌙 开始入夜」','敌人来了！靠近会自动打，点「'+WEAPONS[me().weapon].skill.name+'」放大招'][this.step]}};
 function guideSpot(G,p){let best=null,bd=1e9;for(const s of SPOTS){const b=G.b[s.id],c=Game.nextCost(s);if(b.lv||c==null||c>G.gold)continue;const d=Math.hypot(s.x-p.x,s.y-p.y);if(d<bd){bd=d;best=s}}return best}
 // ---- HUD（只在内容变化时改 DOM） ----
+let hudMM=0;
 const setT=(id,v)=>{const el=$(id);if(el._v!==v){el._v=v;el.textContent=v}};
 const setH=(id,h)=>{const el=$(id);if(el._h!==h){el._h=h;el.classList.toggle('hidden',h)}};
 const setW=(id,w)=>{const el=$(id);w=Math.round(w)+'%';if(el._w!==w){el._w=w;el.style.width=w;el.style.background=parseFloat(w)<30?'#ff5a5a':parseFloat(w)<60?'#ffb347':'#6fd07a'}};
@@ -80,7 +82,8 @@ function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day';
  if(s){const b=G.b[s.id],c=Game.nextCost(s);setH('buildBtn',false);setT('buildBtn',c==null?`${BUILD[s.t].ic} ${BUILD[s.t].name} 已满级`:`${BUILD[s.t].ic} ${b.lv?'升级':'建造'}${BUILD[s.t].name}${b.lv?' → '+(b.lv+1)+'级':''} 💰${c}`);$('buildBtn').classList.toggle('poor',c==null||G.gold<c)}else setH('buildBtn',true);
  setH('nightBtn',!day);
  const W=WEAPONS[p.weapon];setH('skillBtn',G.phase!=='night');setT('skillName',W.skill.name);setT('skillCd',p.skillCd>0?''+Math.ceil(p.skillCd):'');
- setH('armyBtn',!G.units.length);setT('armyBtn',G.armyLeader===p.id?'🏕️ 回营地':'🐱 跟我来');
+ setH('armyRow',!G.units.length);$('followBtn').classList.toggle('on',G.army.mode==='follow');$('deployBtn').classList.toggle('on',G.army.mode==='deploy');
+ const mm=Math.round(Game.view.mm.s)+(Game.view.mm.big?1:0);if(mm!==hudMM){hudMM=mm;$('stage').style.setProperty('--mm',(Game.view.mm.big?0:Math.round(Game.view.mm.s))+'px')}
  const tt=tut.text(G);let h=tt;
  if(!h){if(day)h=s?'点右下角按钮建造 / 升级':'今晚敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来 · 准备好就入夜';
   else if(G.phase==='night')h=p.dead?`${DOGS[p.dog].name}复活中… ${Math.ceil(p.respawn)}`:`敌人还剩 ${G.enemies.length+G.spawnQ.length} 个 · 靠近敌人会自动攻击`;else h=''}

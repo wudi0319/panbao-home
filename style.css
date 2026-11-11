@@ -64,3 +64,10 @@ button{touch-action:manipulation;font-family:inherit}
  .ov .card{max-height:none}
 }
 #hud{flex-wrap:nowrap}.bars{min-width:84px}
+
+/* v0.3 小兵指令 + 小地图 */
+.armyRow{display:flex;gap:8px}
+.act.sq{font-size:14px;padding:10px 12px;min-height:48px;background:#fff8e7;box-shadow:0 4px 0 #c8b498}
+.act.sq.on{background:#ffd23f;box-shadow:0 4px 0 #e0a020;outline:3px solid #ff8c42}
+#hint,#toast{left:calc(50% + var(--mm,0px)/2 + 6px);max-width:calc(100vw - var(--mm,0px) - 34px)}
+@media (orientation:portrait){#toast{top:calc(env(safe-area-inset-top) + 124px)}}
