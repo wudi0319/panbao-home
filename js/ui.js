@@ -43,8 +43,8 @@ muteLabel();
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true)});
 // ---- 摇杆：左半屏任意位置按下都能出摇杆（浮动摇杆），键盘 WASD ----
 const joy=$('joy'),knob=$('knob'),stage=$('stage');let jv={x:0,y:0},jid=null;const keys=new Set();
-function joyMove(e){const r=joy.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const m=Math.hypot(dx,dy),R=r.width/2-10;
- if(m>R){dx=dx/m*R;dy=dy/m*R}knob.style.transform=`translate(${dx}px,${dy}px)`;const n=Math.min(1,m/R*1.15);jv=m<4?{x:0,y:0}:{x:dx/m*n,y:dy/m*n};tut.on('move')}
+function joyMove(e){const r=joy.getBoundingClientRect(),dx0=e.clientX-(r.left+r.width/2),dy0=e.clientY-(r.top+r.height/2),m=Math.hypot(dx0,dy0),R=r.width/2-10;
+ const k=m>R?R/m:1;knob.style.transform=`translate(${dx0*k}px,${dy0*k}px)`;const n=m<4?0:Math.min(1,m/R*1.15);jv=n===0?{x:0,y:0}:{x:dx0/m*n,y:dy0/m*n};tut.on('move')}
 function joyStart(e,float){if(jid!==null||paused)return;jid=e.pointerId;if(float){joy.classList.add('float');joy.style.left=(e.clientX-joy.offsetWidth/2)+'px';joy.style.top=(e.clientY-joy.offsetHeight/2)+'px';joy.style.bottom='auto'}
  try{(float?$('map'):joy).setPointerCapture(jid)}catch(_){}joyMove(e)}
 const joyEnd=e=>{if(e.pointerId!==jid)return;jid=null;jv={x:0,y:0};knob.style.transform='';joy.classList.remove('float');joy.style.left=joy.style.top=joy.style.bottom=''};
