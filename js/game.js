@@ -8,33 +8,33 @@ let G=null,uid=1;
 const hooks={toast:()=>{},end:()=>{},hud:()=>{},sfx:()=>{}};
 const sfx=k=>hooks.sfx(k);
 
-function newGame(o){const tal=new Set(o.talents||[]);
+function newGame(o){useMap(o.map||'yard');rebuildDecor();const tal=new Set(o.talents||[]);
  const mods={gold:tal.has('piggy')?1.3:1,pet:tal.has('pets')?1.35:1,hp:tal.has('tough')?1.6:1,stone:tal.has('stone')?1.5:1,ehp:tal.has('wolfy')?1.6:1,edmg:tal.has('wolfy')?1.25:1,count:tal.has('wolfy')?1.3:1,drop:tal.has('wolfy')?1.25:1};
- G={phase:'day',night:0,gold:15+(tal.has('piggy')?10:0),t:0,nightT:0,spawnQ:[],talents:[...tal],mods,
+ G={phase:'day',night:0,gold:(MAP.gold||15)+(tal.has('piggy')?10:0),t:0,nightT:0,spawnQ:[],talents:[...tal],mods,map:MAP.id,
   home:{hp:300*mods.stone,max:300*mods.stone,cd:0,hurtT:0},players:{},me:o.dog,b:{},enemies:[],units:[],shots:[],fx:[],floats:[],coins:[],
   input:{},army:{mode:'camp',leader:null,x:0,y:0},dark:0,shake:0,stats:{kills:0}};
  for(const s of SPOTS)G.b[s.id]={lv:0,hp:0,max:0,cd:0,dead:0};
- view.mm.big=false;view.guide=null;addPlayer(o.dog,o.dog,o.weapon);return G}
+ view.mm.big=false;view.guide=null;addPlayer(o.dog,o.dog,o.weapon);navDirty=1;rebuildNav();cam.x=HOME.x;cam.y=HOME.y;return G}
 function addPlayer(id,dog,weapon){const max=100*G.mods.hp;
  G.players[id]={id,dog,weapon,x:HOME.x,y:HOME.y+2.2,dir:0,hp:max,max,cd:0,skillCd:0,dead:0,respawn:0,ph:0,moving:false,swing:0,face:{x:0,y:1}};G.input[id]={x:0,y:0}}
 const spotOf=id=>SPOTS.find(s=>s.id===id);
 const bStat=(s,k,lv)=>BUILD[s.t][k][lv-1];
 function bMax(s,lv){let h=bStat(s,'hp',lv);if(s.t==='wall')h*=G.mods.stone;return h}
 function nextCost(s){const b=G.b[s.id];return b.lv>=3?null:BUILD[s.t].cost[b.lv]}
-function nearSpot(p){let best=null,bd=1.7;for(const s of SPOTS){const d=Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}return best}
+function nearSpot(p){let best=null,bd=1.7;for(const s of SPOTS){const d=s.t==='wall'?Math.max(0,bDist(s,p.x,p.y)+WALL_HT+.15):Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}return best}
 function build(pid,sid){if(G.phase!=='day')return false;const p=G.players[pid],s=spotOf(sid)||nearSpot(p);if(!s)return false;
- const b=G.b[s.id],c=nextCost(s);if(c==null){hooks.toast(BUILD[s.t].name+'已经满级啦');return false}
+ const b=G.b[s.id],c=nextCost(s);if(c==null){hooks.toast(bName(s)+'已经满级啦');return false}
  if(G.gold<c){hooks.toast('金币不够，还差 '+(c-G.gold)+' 💰');sfx('poor');return false}
  G.gold-=c;b.lv++;b.max=bMax(s,b.lv);b.hp=b.max;b.dead=0;
- G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');hooks.toast((b.lv===1?'建好了 ':'升级到 '+b.lv+' 级 ')+BUILD[s.t].name+'！');
- syncUnits();return true}
+ G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');hooks.toast((b.lv===1?'建好了 ':'升级到 '+b.lv+' 级 ')+bName(s)+'！');
+ navDirty=1;for(const q of Object.values(G.players))if(!q.dead)pushOut(q,.3);for(const u of G.units)if(!u.dead)pushOut(u,.28);syncUnits();return true}
 function startNight(){if(G.phase!=='day')return;G.phase='night';G.nightT=0;G.spawnQ=waveFor(G.night+1,G.mods.count);sfx('night');
  hooks.toast('🌙 第 '+(G.night+1)+' 夜，敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来了！')}
 function morning(){G.night++;G.phase='day';G.coins=[];
  if(G.night>=NIGHTS){G.phase='win';endGame(true);return}
  let pay=4;for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)}
  pay=Math.round(pay*G.mods.gold);G.gold+=pay;
- for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}
+ for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}navDirty=1;
  G.home.hp=G.home.max;for(const p of Object.values(G.players)){p.hp=p.max;p.dead=0;p.swing=0;p.skillT=0;p.cd=0}
  for(const u of G.units){u.dead=0;u.hp=u.max}
  G.shots=[];sfx('morning');hooks.toast('☀️ 天亮啦！菜园和家里收入 +'+pay+' 💰')}
@@ -65,30 +65,64 @@ function playerAttack(p,dt){const W=WEAPONS[p.weapon];p.cd-=dt;p.skillCd=Math.ma
  if(W.kind==='melee'){enemiesNear(p.x,p.y,W.range).sort((a,b)=>dist(a,p)-dist(b,p)).slice(0,W.maxHit).forEach(e=>{hurtEnemy(e,W.dmg,0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:W.range,w:p.weapon})}
  else if(W.kind==='ranged')shoot(p,tg,W.dmg,'frisbee',11,1);
  else{enemiesNear(p.x,p.y,W.range).forEach(e=>hurtEnemy(e,W.dmg,.3,1));G.shake=Math.max(G.shake,.12);G.fx.push({k:'slam',x:p.x,y:p.y,t:0,life:.35,r:W.range});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.26,r:Math.min(W.range,1.8),w:p.weapon})}}
-// 敌人能撞上的东西：建筑（墙是长条），家
-function blocker(e,nx,ny){const r=ENEMIES[e.k].r;
- for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead)continue;
-  if(s.t==='wall'){const hl=2.7,ht=.35,dx=Math.abs(nx-s.x),dy=Math.abs(ny-s.y);if(s.v?(dx<ht+r&&dy<hl+r):(dy<ht+r&&dx<hl+r))return s}
-  else if(Math.hypot(nx-s.x,ny-s.y)<.75+r)return s}
- return null}
-// 到建筑的距离（墙按长条算）
-function bNear(s,x,y){if(s.t!=='wall')return{x:s.x,y:s.y};return s.v?{x:s.x,y:clamp(y,s.y-2.7,s.y+2.7)}:{x:clamp(x,s.x-2.7,s.x+2.7),y:s.y}}
-function bDist(s,x,y){const q=bNear(s,x,y);return Math.hypot(x-q.x,y-q.y)-(s.t==='wall'?.35:.75)}
-function solidAt(x,y,r){for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead)continue;
-  if(s.t==='wall'){const dx=Math.abs(x-s.x),dy=Math.abs(y-s.y),along=s.v?dy:dx;if(along<.85)continue; // 中间是门：自己人能走，敌人不能
-   if(s.v?(dx<.35+r&&dy<2.7+r):(dy<.35+r&&dx<2.7+r))return true}else if(Math.hypot(x-s.x,y-s.y)<.6+r)return true}return false}
-function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1;G.shake=Math.max(G.shake,.15);sfx('home')}else if(tg.kind==='b'){const b=G.b[tg.s.id];b.hp-=d;if(b.hp<=0){b.hp=0;b.dead=1;hooks.toast(BUILD[tg.s.t].name+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
+// 墙段碰撞：敌人整段（含门）都过不去；自己人可以从门洞穿过
+function segHit(g,x,y,r){const hl=g.len/2,ht=WALL_HT,dx=Math.abs(x-g.x),dy=Math.abs(y-g.y);return g.v?(dx<ht+r&&dy<hl+r):(dy<ht+r&&dx<hl+r)}
+function segFriendHit(g,x,y,r){if(g.gate){const along=g.v?Math.abs(y-g.y):Math.abs(x-g.x);if(along<g.gate)return false}return segHit(g,x,y,r)}
+function segClosest(g,x,y){return g.v?{x:g.x,y:clamp(y,g.y-g.len/2,g.y+g.len/2)}:{x:clamp(x,g.x-g.len/2,g.x+g.len/2),y:g.y}}
+function bNear(s,x,y){if(s.t!=='wall')return{x:s.x,y:s.y};let best=null,bd=1e9;for(const g of segsOf(s)){const q=segClosest(g,x,y),d=Math.hypot(x-q.x,y-q.y);if(d<bd){bd=d;best=q}}return best}
+function bDist(s,x,y){const q=bNear(s,x,y);return Math.hypot(x-q.x,y-q.y)-(s.t==='wall'?WALL_HT:.75)}
+function wallHit(s,x,y,r,friend){for(const g of segsOf(s))if(friend?segFriendHit(g,x,y,r):segHit(g,x,y,r))return g;return null}
+function enemySolid(x,y,r){for(const s of SPOTS){const b=G&&G.b[s.id];if(!b||!b.lv||b.dead)continue;if(s.t==='wall'){if(wallHit(s,x,y,r,0))return s}else if(Math.hypot(x-s.x,y-s.y)<.75+r)return s}return null}
+function solidAt(x,y,r){for(const s of SPOTS){const b=G&&G.b[s.id];if(!b||!b.lv||b.dead)continue;if(s.t==='wall'){if(wallHit(s,x,y,r,1))return true}else if(Math.hypot(x-s.x,y-s.y)<.6+r)return true}return false}
+function blocker(e,nx,ny){return enemySolid(nx,ny,ENEMIES[e.k].r)}
+function pushOut(o,r,en){const hit=en?(x,y)=>!!enemySolid(x,y,r):(x,y)=>solidAt(x,y,r);if(!hit(o.x,o.y))return;
+ for(let d=.2;d<3;d+=.18)for(let a=0;a<14;a++){const nx=o.x+Math.cos(a*Math.PI/7)*d,ny=o.y+Math.sin(a*Math.PI/7)*d;
+  if(nx>.4&&ny>.4&&nx<MAP_W-.4&&ny<MAP_H-.4&&!hit(nx,ny)){o.x=nx;o.y=ny;return}}}
+// 寻路网格：有缺口就流向家里，围死了就去打最近的墙
+const CELL=.5;let navW=0,navH=0,navBlock,navFriend,flowX,flowY,flowOk,navDirty=1;
+function rebuildNav(){navDirty=0;navW=Math.ceil(MAP_W/CELL)+1;navH=Math.ceil(MAP_H/CELL)+1;const n=navW*navH;navBlock=new Uint8Array(n);navFriend=new Uint8Array(n);
+ for(let iy=0;iy<navH;iy++)for(let ix=0;ix<navW;ix++){const x=ix*CELL,y=iy*CELL,o=y<0||x<0||x>MAP_W||y>MAP_H;navBlock[iy*navW+ix]=o||(G&&enemySolid(x,y,.45))?1:0;navFriend[iy*navW+ix]=o||(G&&solidAt(x,y,.35))?1:0}
+ flowX=new Int8Array(n);flowY=new Int8Array(n);flowOk=new Uint8Array(n);const qx=new Int16Array(n),qy=new Int16Array(n);let qh=0,qt=0;
+ const hx=Math.round(HOME.x/CELL),hy=Math.round(HOME.y/CELL),R=Math.ceil((HOME.r+.8)/CELL);
+ for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){const ix=hx+dx,iy=hy+dy;if(ix<0||iy<0||ix>=navW||iy>=navH||dx*dx+dy*dy>R*R)continue;const i=iy*navW+ix;if(navBlock[i]||flowOk[i])continue;flowOk[i]=1;qx[qt]=ix;qy[qt]=iy;qt++}
+ const D=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+ while(qh<qt){const cx=qx[qh],cy=qy[qh];qh++;
+  for(const [dx,dy] of D){if(dx&&dy&&(navBlock[cy*navW+(cx+dx)]||navBlock[(cy+dy)*navW+cx]))continue;
+   const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=navW||ny>=navH)continue;const i=ny*navW+nx;if(flowOk[i]||navBlock[i])continue;
+   flowOk[i]=1;flowX[i]=-dx;flowY[i]=-dy;qx[qt]=nx;qy[qt]=ny;qt++}}}
+function flowAt(x,y){if(navDirty||!flowOk)rebuildNav();const ix=clamp(Math.round(x/CELL),0,navW-1),iy=clamp(Math.round(y/CELL),0,navH-1),i=iy*navW+ix;return flowOk[i]?{ok:1,x:flowX[i],y:flowY[i]}:{ok:0}}
+function lineClear(x0,y0,x1,y1,r,en){const d=Math.hypot(x1-x0,y1-y0)||.001,n=Math.max(2,Math.ceil(d/.3));for(let i=1;i<=n;i++){const x=x0+(x1-x0)*i/n,y=y0+(y1-y0)*i/n;if(en?enemySolid(x,y,r):solidAt(x,y,r))return false}return true}
+function nearestWall(x,y){let best=null,bd=1e9;for(const s of SPOTS){if(s.t!=='wall')continue;const b=G.b[s.id];if(!b.lv||b.dead)continue;const d=bDist(s,x,y);if(d<bd){bd=d;best=s}}return best}
+function astar(x0,y0,x1,y1,friend){if(navDirty||!navFriend)rebuildNav();const blk=friend?navFriend:navBlock;
+ const ix0=clamp(Math.round(x0/CELL),0,navW-1),iy0=clamp(Math.round(y0/CELL),0,navH-1),ix1=clamp(Math.round(x1/CELL),0,navW-1),iy1=clamp(Math.round(y1/CELL),0,navH-1);
+ const n=navW*navH,came=new Int32Array(n).fill(-1),cost=new Float32Array(n).fill(1e9),open=[];
+ const idx=(x,y)=>y*navW+x,ok=(x,y)=>x>=0&&y>=0&&x<navW&&y<navH&&!blk[idx(x,y)];
+ let sx=ix0,sy=iy0,gx=ix1,gy=iy1;
+ if(!ok(sx,sy)){for(let d=1;d<=4&&!ok(sx,sy);d++)for(let a=0;a<8;a++){const x=ix0+Math.round(Math.cos(a*Math.PI/4)*d),y=iy0+Math.round(Math.sin(a*Math.PI/4)*d);if(ok(x,y)){sx=x;sy=y;break}}}
+ if(!ok(gx,gy)){for(let d=1;d<=6&&!ok(gx,gy);d++)for(let a=0;a<8;a++){const x=ix1+Math.round(Math.cos(a*Math.PI/4)*d),y=iy1+Math.round(Math.sin(a*Math.PI/4)*d);if(ok(x,y)){gx=x;gy=y;break}}}
+ cost[idx(sx,sy)]=0;open.push((sx<<16)|sy);const D=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.41],[1,-1,1.41],[-1,1,1.41],[-1,-1,1.41]];
+ let found=-1,steps=0;
+ while(open.length&&steps++<2800){let bi=0,bf=1e9;for(let i=0;i<open.length;i++){const v=open[i],x=v>>16,y=v&65535,f=cost[idx(x,y)]+Math.hypot(x-gx,y-gy);if(f<bf){bf=f;bi=i}}
+  const v=open.splice(bi,1)[0],cx=v>>16,cy=v&65535,ci=idx(cx,cy);if(cx===gx&&cy===gy){found=ci;break}
+  for(const[dx,dy,c]of D){const nx=cx+dx,ny=cy+dy;if(!ok(nx,ny))continue;if(dx&&dy&&(blk[idx(cx+dx,cy)]||blk[idx(cx,cy+dy)]))continue;
+   const i=idx(nx,ny),nc=cost[ci]+c;if(nc<cost[i]){cost[i]=nc;came[i]=ci;open.push((nx<<16)|ny)}}}
+ if(found<0)return null;const path=[];let i=found;while(i>=0&&path.length<240){path.push({x:(i%navW)*CELL,y:Math.floor(i/navW)*CELL});i=came[i]}path.reverse();return path}
+function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1;G.shake=Math.max(G.shake,.15);sfx('home')}else if(tg.kind==='b'){const b=G.b[tg.s.id];b.hp-=d;if(b.hp<=0){b.hp=0;b.dead=1;navDirty=1;hooks.toast(bName(tg.s)+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
  else{const o=tg.o;o.hp-=d;o.flash=.15;if(tg.kind==='p')sfx('hurt');if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?6:12;if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 6 秒后回家复活')}}}
 function stepEnemy(e,dt){const E=ENEMIES[e.k];e.cd-=dt;e.flash=Math.max(0,(e.flash||0)-dt);if(e.stun>0){e.stun-=dt;return}
- e.rt-=dt;if(e.rt<=0){e.rt=.4;e.tg=null;let bd=E.aggro;
+ e.rt-=dt;if(e.rt<=0){e.rt=.35;e.tg=null;let bd=E.aggro;
   for(const p of Object.values(G.players))if(!p.dead){const d=dist(p,e);if(d<bd){bd=d;e.tg={kind:'p',o:p}}}
   for(const u of G.units)if(!u.dead){const d=dist(u,e);if(d<bd){bd=d;e.tg={kind:'u',o:u}}}
-  if(!e.tg){let bb=E.aggro*.6+(E.smash?1:0); // 路边的建筑也会被打（所有建筑都能被攻击）
-   for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead)continue;const d=bDist(s,e.x,e.y);if(d<bb){bb=d;e.tg={kind:'b',s}}}}}
+  if(!e.tg){let bb=.45+(E.smash?.9:0);for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead)continue;const d=bDist(s,e.x,e.y);if(d<bb){bb=d;e.tg={kind:'b',s}}}}}
  if(e.tg&&(e.tg.kind==='b'?G.b[e.tg.s.id].dead:e.tg.o.dead))e.tg=null;
- const tg=e.tg||{kind:'home'};let tx,ty,tr;if(tg.kind==='home'){tx=HOME.x;ty=HOME.y;tr=HOME.r}else if(tg.kind==='b'){const q=bNear(tg.s,e.x,e.y);tx=q.x;ty=q.y;tr=tg.s.t==='wall'?0:.75}else{tx=tg.o.x;ty=tg.o.y;tr=.3}
+ let tx,ty,tr,tg=e.tg;
+ if(tg&&(tg.kind==='p'||tg.kind==='u')&&!lineClear(e.x,e.y,tg.o.x,tg.o.y,E.r*.55,1))tg=null;
+ if(tg&&(tg.kind==='p'||tg.kind==='u')){tx=tg.o.x;ty=tg.o.y;tr=.3}
+ else if(tg&&tg.kind==='b'){const q=bNear(tg.s,e.x,e.y);tx=q.x;ty=q.y;tr=tg.s.t==='wall'?0:.75}
+ else{const fl=flowAt(e.x,e.y);if(fl.ok){if(!fl.x&&!fl.y){tx=HOME.x;ty=HOME.y;tr=HOME.r;tg={kind:'home'}}else{tx=e.x+fl.x;ty=e.y+fl.y;tr=0;tg={kind:'home'}}}
+  else{const w=nearestWall(e.x,e.y);if(w){tg={kind:'b',s:w};e.tg=tg;const q=bNear(w,e.x,e.y);tx=q.x;ty=q.y;tr=0}else{tx=HOME.x;ty=HOME.y;tr=HOME.r;tg={kind:'home'}}}}
  const dx=tx-e.x,dy=ty-e.y,d=Math.hypot(dx,dy)||.001;e.moving=false;
- if(d<=E.r+tr+.15){if(e.cd<=0){e.cd=E.cd;e.atk=.2;hitTarget(e,tg,E.dmg)}return}
+ if(tg&&d<=E.r+tr+.15){if(e.cd<=0){e.cd=E.cd;e.atk=.2;hitTarget(e,tg,E.dmg)}return}
  const sp=E.spd*dt,nx=e.x+dx/d*sp,ny=e.y+dy/d*sp,bl=blocker(e,nx,ny);
  if(bl){if(e.cd<=0){e.cd=E.cd;e.atk=.2;hitTarget(e,{kind:'b',s:bl},E.dmg*(E.smash?1.6:1))}return}
  e.x=nx;e.y=ny;e.moving=true;e.ph+=dt*9;if(Math.abs(dx)>.05)e.dir=dx<0?2:3}
@@ -102,8 +136,12 @@ function stepUnit(u,dt){const U=UNITS[u.k],s=spotOf(u.home),b=G.b[s.id];u.flash=
  if(G.phase==='night'){tg=nearestEnemy(u.x,u.y,3.4);if(tg&&dist(tg,an)>5.5)tg=null}
  const dmg=U.dmg*G.mods.pet*(1+.3*(b.lv-1));
  if(tg){const d=dist(tg,u)-ENEMIES[tg.k].r;if(d<=U.range){u.moving=false;if(u.cd<=0){u.cd=U.cd;u.atk=.2;if(u.k==='duck')shoot(u,tg,dmg,'bread',9);else hurtEnemy(tg,dmg)}u.dir=tg.x<u.x?2:3;return}goal=tg}
- const dx=goal.x-u.x,dy=goal.y-u.y,d=Math.hypot(dx,dy);if(d<.15){u.moving=false;return}
- const sp=Math.min(d,U.spd*dt*(d>3?1.4:1));u.x+=dx/d*sp;u.y+=dy/d*sp;u.moving=true;u.ph+=dt*12;if(Math.abs(dx)>.05)u.dir=dx<0?2:3}
+ const dx=goal.x-u.x,dy=goal.y-u.y,d=Math.hypot(dx,dy);if(d<.15){u.moving=false;u.path=null;return}
+ const sp=Math.min(d,U.spd*dt*(d>3?1.4:1));let vx=dx/d,vy=dy/d;
+ if(!lineClear(u.x,u.y,u.x+vx*Math.min(.8,d),u.y+vy*Math.min(.8,d),.26,0)){u.pathT=(u.pathT||0)-dt;if(!u.path||u.pathT<=0){u.path=astar(u.x,u.y,goal.x,goal.y,1);u.pathT=.45}
+  if(u.path&&u.path.length){while(u.path.length>1&&Math.hypot(u.path[0].x-u.x,u.path[0].y-u.y)<.35)u.path.shift();const q=u.path[0],pd=Math.hypot(q.x-u.x,q.y-u.y)||.001;vx=(q.x-u.x)/pd;vy=(q.y-u.y)/pd} }
+ const nx=u.x+vx*sp,ny=u.y+vy*sp;if(!solidAt(nx,ny,.26)){u.x=nx;u.y=ny}else{const ox=u.x+vx*sp,oy=u.y;if(!solidAt(ox,u.y,.26))u.x=ox;if(!solidAt(u.x,u.y+vy*sp,.26))u.y+=vy*sp;pushOut(u,.26)}
+ u.moving=true;u.ph+=dt*12;if(Math.abs(vx)>.05)u.dir=vx<0?2:3}
 // 被圆形建筑（塔/营地/菜园）挡住时，顺着边绕过去，不会卡住
 function slideAround(p,inp,sp){let best=null,bd=1.4;for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead||s.t==='wall')continue;const d=Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}
  if(!best)return;const rx=(p.x-best.x)/bd,ry=(p.y-best.y)/bd;let tx=-ry,ty=rx;if(tx*inp.x+ty*inp.y<0){tx=-tx;ty=-ty}
@@ -118,12 +156,12 @@ function stepPlayer(p,dt){const inp=G.input[p.id]||{x:0,y:0};p.flash=Math.max(0,
  if(G.phase==='night')playerAttack(p,dt);else{p.skillCd=0}}
 function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark+=((G.phase==='night'?1:0)-G.dark)*Math.min(1,dt*1.5);
  for(const p of Object.values(G.players))stepPlayer(p,dt);
- if(G.phase==='night'){G.nightT+=dt;const n=G.night+1,mul=(1+.16*(n-1))*G.mods.ehp;
+ if(G.phase==='night'){if(navDirty)rebuildNav();G.nightT+=dt;const n=G.night+1,mul=(1+.16*(n-1))*G.mods.ehp;
   while(G.spawnQ.length&&G.spawnQ[0].t<=G.nightT){const q=G.spawnQ.shift(),D=DIRS[q.dir],E=ENEMIES[q.k],j=(Math.random()-.5)*3;
    G.enemies.push({id:uid++,k:q.k,x:D.x+(q.dir==='N'||q.dir==='S'?j:0),y:D.y+(q.dir==='W'||q.dir==='E'?j:0),hp:E.hp*mul,max:E.hp*mul,cd:0,rt:0,dir:2,ph:Math.random()*6,moving:true})}
   for(const e of G.enemies)if(!e.dead)stepEnemy(e,dt);
   // 互相挤开
-  const es=G.enemies;for(let i=0;i<es.length;i++)for(let k=i+1;k<es.length;k++){const a=es[i],b=es[k],rr=ENEMIES[a.k].r+ENEMIES[b.k].r,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d>0&&d<rr){const o=(rr-d)/2*.5;a.x-=dx/d*o;a.y-=dy/d*o;b.x+=dx/d*o;b.y+=dy/d*o}}
+  const es=G.enemies;for(let i=0;i<es.length;i++)for(let k=i+1;k<es.length;k++){const a=es[i],b=es[k],rr=ENEMIES[a.k].r+ENEMIES[b.k].r,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d>0&&d<rr){const o=(rr-d)/2*.5;a.x-=dx/d*o;a.y-=dy/d*o;b.x+=dx/d*o;b.y+=dy/d*o}}for(const e of es)if(!e.dead)pushOut(e,ENEMIES[e.k].r,1);
   // 弹弓塔 + 家（胖宝扔奶瓶）
   for(const s of SPOTS){const b=G.b[s.id];if(s.t!=='tower'||!b.lv||b.dead)continue;b.cd-=dt;if(b.cd>0)continue;const tg=nearestEnemy(s.x,s.y,bStat(s,'range',b.lv));if(tg){b.cd=bStat(s,'cd',b.lv);shoot({x:s.x,y:s.y-.6},tg,bStat(s,'dmg',b.lv),'pebble',12)}}
   G.home.cd-=dt;if(G.home.cd<=0){const tg=nearestEnemy(HOME.x,HOME.y,4);if(tg){G.home.cd=1.1;shoot({x:HOME.x,y:HOME.y-.4},tg,6,'bottle',8)}}
@@ -149,9 +187,12 @@ const sprCache={};function cachedSpr(k,x,y,size){const key=k+'|'+size+'|'+T+'|'+
  ctx.drawImage(c,sx(x)-size*T/2-.1*size*T,sy(y)-size*T*.95-.1*size*T,c.width/DPR,c.height/DPR)}
 function spr(fn,x,y,size,...a){ctx.save();ctx.translate(sx(x)-size*T/2,sy(y)-size*T*.95);ctx.scale(size*T,size*T);fn(ctx,...a);ctx.restore()}
 let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
-const DECOR=[];(()=>{for(let i=0;i<260&&DECOR.length<95;i++){const x=1+rnd()*(MAP_W-2),y=1+rnd()*(MAP_H-2);
- if(Math.hypot(x-HOME.x,y-HOME.y)<7.5||Math.abs(x-17)<2||Math.abs(y-17)<2)continue;if(SPOTS.some(s=>Math.hypot(s.x-x,s.y-y)<2.2))continue;if(DECOR.some(d=>Math.hypot(d.x-x,d.y-y)<1.3))continue;
- DECOR.push({x,y,k:rnd()<.62?'tree':rnd()<.5?'rock':'flower'})}})();
+const DECOR=[];
+function rebuildDecor(){DECOR.length=0;seed=7;for(let i=0;i<300&&DECOR.length<95;i++){const x=1+rnd()*(MAP_W-2),y=1+rnd()*(MAP_H-2);
+ if(Math.hypot(x-HOME.x,y-HOME.y)<7.5||Math.abs(x-HOME.x)<2||Math.abs(y-HOME.y)<2)continue;
+ if(SPOTS.some(s=>s.t==='wall'?segsOf(s).some(g=>Math.hypot(x-segClosest(g,x,y).x,y-segClosest(g,x,y).y)<1.3):Math.hypot(s.x-x,s.y-y)<2.2))continue;
+ if(DECOR.some(d=>Math.hypot(d.x-x,d.y-y)<1.3))continue;DECOR.push({x,y,k:rnd()<.62?'tree':rnd()<.5?'rock':'flower'})}}
+rebuildDecor();
 const babyImg={};for(const f of['idle0','idle1','cry0','cry1','laugh0','laugh1']){const i=new Image();i.src='img/baby/beige-'+f+'.png';babyImg[f]=i}
 // ---- 小动物画法（单位格 0..1，脚在 .95） ----
 function critter(c,k,dir,ph,mv,flash){const f=dir===2?-1:1,b=mv?Math.abs(Math.sin(ph))*.05:0,K='#3b2a20';c.save();c.translate(.5,0);c.scale(f,1);c.translate(-.5,0);
@@ -225,11 +266,19 @@ function drawPlayer(p){const size=1.3,dir=visDir(p),kind=p.dog,w=p.weapon,sc=1.1
  S.puppy(c,dir,p.ph,p.moving,kind);pose();ctx.restore()}
 function bar(x,y,w,frac,col){const X=sx(x)-w*T/2,Y=sy(y);ctx.fillStyle='rgba(255,255,255,.9)';ctx.beginPath();ctx.roundRect(X-1,Y-1,w*T+2,6,3);ctx.fill();ctx.fillStyle=col||(frac<.3?'#ff5a5a':frac<.6?'#ffb347':'#6fd07a');ctx.fillRect(X,Y,w*T*clamp(frac,0,1),4)}
 function stars(x,y,n){ctx.font=`900 ${T*.32}px sans-serif`;ctx.textAlign='center';ctx.fillStyle='#ffd23f';ctx.strokeStyle='#6b4a32';ctx.lineWidth=2.5;const t='★'.repeat(n);ctx.strokeText(t,sx(x),sy(y));ctx.fillText(t,sx(x),sy(y))}
+function drawGateAt(g,b){const X=sx(g.x),Y=sy(g.y),u=T,gw=g.gate*u;let ox=g.v?1:0,oy=g.v?0:1;if(ox*(HOME.x-g.x)+oy*(HOME.y-g.y)>0){ox=-ox;oy=-oy}
+ ctx.save();ctx.translate(X,Y);const post=(x,y)=>{ctx.fillStyle='#c98b52';ctx.strokeStyle='#3b2a20';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(x-u*.11,y-u*.58,u*.22,u*.72,u*.08);ctx.fill();ctx.stroke();ctx.fillStyle='#e8b47c';ctx.beginPath();ctx.arc(x,y-u*.58,u*.1,0,7);ctx.fill();ctx.stroke()};
+ const ax=g.v?0:1,ay=g.v?1:0;post(-ax*gw,-ay*gw);post(ax*gw,ay*gw);
+ if(!b.dead){const wrap=d=>{while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return d};const leaf=side=>{ctx.save();ctx.translate(side*ax*gw,side*ay*gw);const closed=Math.atan2(-side*ay,-side*ax),open=Math.atan2(oy,ox);ctx.rotate(closed+wrap(open-closed)*.78);ctx.fillStyle='#f2c28a';ctx.strokeStyle='#3b2a20';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(0,-u*.1,gw*.72,u*.2,u*.06);ctx.fill();ctx.stroke();ctx.restore()};leaf(-1);leaf(1)}
+ ctx.restore()}
+function drawWallSpot(s,b){const u=T,col=b.lv===1?'#c98b52':b.lv===2?'#b9bfc8':'#9aa3ae';ctx.lineWidth=2;ctx.strokeStyle='#3b2a20';ctx.lineJoin='round';
+ for(const g of segsOf(s)){const L=g.len,n=Math.max(5,Math.round(L/.5));
+  for(let i=0;i<n;i++){const o=-L/2+L*(i+.5)/n;if(g.gate&&Math.abs(o)<g.gate)continue;const px=sx(g.x)+(g.v?0:o*u),py=sy(g.y)+(g.v?o*u:0);
+   const w=g.v?u*.78:u*(L/n)*1.08,h=g.v?u*(L/n)*1.08:u*.78;ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(px-w/2,py-h/2-u*.16,w,h,u*.1);ctx.fill();ctx.stroke()}
+  if(g.gate)drawGateAt(g,b)}
+ if(b.lv===3){ctx.fillStyle='#ff8c5a';const g=segsOf(s)[0],L=g.len,fx=sx(g.x),fy=sy(g.y);[-.35,.35].forEach(q=>{const x=g.v?fx:fx+q*L*u,y=g.v?fy+q*L*u:fy;if(g.gate&&Math.abs(q*L)<g.gate)return;ctx.fillRect(x-1,y-u*1.05,2,u*.55);ctx.beginPath();ctx.moveTo(x+1,y-u*1.05);ctx.lineTo(x+u*.32,y-u*.9);ctx.lineTo(x+1,y-u*.75);ctx.fill()})}}
 function drawBuilding(s,b){const X=sx(s.x),Y=sy(s.y),u=T;ctx.save();if(b.dead)ctx.globalAlpha=.45;ctx.lineWidth=2;ctx.strokeStyle='#3b2a20';ctx.lineJoin='round';
- if(s.t==='wall'){const L=5.4,n=b.lv===1?9:7;for(let i=0;i<n;i++){const o=-L/2+L*(i+.5)/n;const px=s.v?X:X+o*u,py=s.v?Y+o*u:Y;
-   const gate=Math.abs(o)<.85;if(b.lv===1){ctx.fillStyle=gate?'#f2c28a':'#c98b52';ctx.beginPath();ctx.roundRect(px-u*.12,py-u*.55,u*.24,u*.7,u*.08);ctx.fill();ctx.stroke()}
-   else{ctx.fillStyle=gate?'#d9a066':b.lv===2?'#b9bfc8':'#9aa3ae';const w=s.v?u*.7:u*L/n*.92,h=s.v?u*L/n*.92:u*.7;ctx.beginPath();ctx.roundRect(px-w/2,py-h/2-u*.25,w,h,u*.1);ctx.fill();ctx.stroke()}}
-  if(b.lv===3){ctx.fillStyle='#ff8c5a';[-1,1].forEach(q=>{const fx=s.v?X:X+q*L/2*u*.8,fy=s.v?Y+q*L/2*u*.8:Y;ctx.fillRect(fx-1,fy-u*1.1,2,u*.6);ctx.beginPath();ctx.moveTo(fx+1,fy-u*1.1);ctx.lineTo(fx+u*.35,fy-u*.95);ctx.lineTo(fx+1,fy-u*.8);ctx.fill()})}}
+ if(s.t==='wall'){drawWallSpot(s,b)}
  else if(s.t==='tower'){const h=u*(1.3+b.lv*.25);ctx.fillStyle='rgba(60,40,20,.25)';ctx.beginPath();ctx.ellipse(X,Y+u*.15,u*.55,u*.16,0,0,7);ctx.fill();
   ctx.fillStyle='#b98257';[-1,1].forEach(q=>{ctx.beginPath();ctx.moveTo(X+q*u*.4,Y+u*.15);ctx.lineTo(X+q*u*.25,Y-h+u*.3);ctx.lineTo(X+q*u*.12,Y-h+u*.3);ctx.lineTo(X+q*u*.25,Y+u*.15);ctx.closePath();ctx.fill();ctx.stroke()});
   ctx.fillStyle=b.lv>=2?'#d8dde3':'#e0a96d';ctx.beginPath();ctx.roundRect(X-u*.5,Y-h,u,u*.4,u*.08);ctx.fill();ctx.stroke();
@@ -245,8 +294,8 @@ function drawBuilding(s,b){const X=sx(s.x),Y=sy(s.y),u=T;ctx.save();if(b.dead)ct
  ctx.restore()}
 function drawEmptySpot(s,near){const X=sx(s.x),Y=sy(s.y),c=nextCost(s),ok=G.phase==='day'&&c!=null&&G.gold>=c,pulse=.5+.5*Math.sin(performance.now()/300);ctx.save();ctx.setLineDash([6,4]);ctx.lineWidth=near?3.5:2.5;
  ctx.strokeStyle=near?'#ff8c42':ok?`rgba(255,210,63,${.6+.4*pulse})`:'rgba(255,248,231,.8)';ctx.fillStyle=near?'rgba(255,200,120,.4)':ok?'rgba(255,230,140,.3)':'rgba(255,248,231,.18)';
- ctx.beginPath();if(s.t==='wall'){const L=5.4*T,h=.6*T;s.v?ctx.roundRect(X-h/2,Y-L/2,h,L,8):ctx.roundRect(X-L/2,Y-h/2,L,h,8)}else ctx.ellipse(X,Y,T*.8,T*.55,0,0,7);ctx.fill();ctx.stroke();ctx.setLineDash([]);
- ctx.font=`900 ${T*.36}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='rgba(255,255,255,.85)';const t1=BUILD[s.t].name,t2=c+' 💰';
+ ctx.beginPath();if(s.t==='wall'){for(const g of segsOf(s)){const L=g.len*T,h=WALL_HT*2.4*T;ctx.beginPath();g.v?ctx.roundRect(sx(g.x)-h/2,sy(g.y)-L/2,h,L,8):ctx.roundRect(sx(g.x)-L/2,sy(g.y)-h/2,L,h,8);ctx.fill();ctx.stroke()}}else{ctx.ellipse(X,Y,T*.8,T*.55,0,0,7);ctx.fill();ctx.stroke()}ctx.setLineDash([]);
+ ctx.font=`900 ${T*.36}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='rgba(255,255,255,.85)';const t1=bName(s),t2=c+' 💰';
  ctx.strokeText(t1,X,Y-T*.16);ctx.fillStyle='#7a4b1d';ctx.fillText(t1,X,Y-T*.16);ctx.font=`900 ${T*.3}px sans-serif`;ctx.strokeText(t2,X,Y+T*.2);ctx.fillStyle=ok?'#d9822b':'#a08a70';ctx.fillText(t2,X,Y+T*.2);ctx.restore()}
 function drawWarn(d){const D=DIRS[d],x=clamp(D.x,1,MAP_W-1),y=clamp(D.y,1,MAP_H-1),X=sx(x),Y=sy(y),p=1+Math.sin(performance.now()/200)*.08;
  ctx.save();ctx.translate(X,Y);ctx.scale(p,p);ctx.fillStyle='#f06464';ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,T*.5,0,7);ctx.fill();ctx.stroke();
@@ -269,8 +318,7 @@ function drawMinimap(W,H){const m=view.mm,base=Math.max(84,Math.min(118,Math.min
  const S2=m.s,k=S2/MAP_W,X0=m.x,Y0=m.y,P=(x,y)=>[X0+x*k,Y0+y*k],t=performance.now()/1000;ctx.save();
  ctx.globalAlpha=.92;ctx.fillStyle='#7cc96b';ctx.strokeStyle='#6b4a32';ctx.lineWidth=2.5;ctx.beginPath();ctx.roundRect(X0-3,Y0-3,S2+6,S2+6,8);ctx.fill();ctx.stroke();ctx.globalAlpha=1;
  ctx.fillStyle='#ecd29a';ctx.fillRect(X0+16*k,Y0,2*k,S2);ctx.fillRect(X0,Y0+16*k,S2,2*k);
- for(const s of SPOTS){const b=G.b[s.id];if(!b.lv)continue;const[x,y]=P(s.x,s.y);ctx.fillStyle=b.dead?'#8a8f99':s.t==='wall'?'#c98b52':s.t==='tower'?'#f08a7a':s.t==='farm'?'#b5835a':'#ffd23f';
-  if(s.t==='wall'){const L=5.4*k,h=Math.max(2,.6*k);s.v?ctx.fillRect(x-h/2,y-L/2,h,L):ctx.fillRect(x-L/2,y-h/2,L,h)}else ctx.fillRect(x-2.5,y-2.5,5,5)}
+ for(const s of SPOTS){const b=G.b[s.id];if(s.t==='wall'){for(const g of segsOf(s)){const[x,y]=P(g.x,g.y),L=g.len*k,h=Math.max(2,WALL_HT*2.2*k);ctx.fillStyle=!b.lv?'rgba(255,248,231,.4)':b.dead?'#8a8f99':'#c98b52';if(g.v)ctx.fillRect(x-h/2,y-L/2,h,L);else ctx.fillRect(x-L/2,y-h/2,L,h);if(b.lv&&!b.dead&&g.gate){ctx.fillStyle='#ecd29a';const gw=g.gate*2*k;g.v?ctx.fillRect(x-h/2-1,y-gw/2,h+2,gw):ctx.fillRect(x-gw/2,y-h/2-1,gw,h+2)}}}else{if(!b.lv)continue;const[x,y]=P(s.x,s.y);ctx.fillStyle=b.dead?'#8a8f99':s.t==='tower'?'#f08a7a':s.t==='farm'?'#b5835a':'#ffd23f';ctx.fillRect(x-2.5,y-2.5,5,5)}}
  {const[x,y]=P(HOME.x,HOME.y);ctx.fillStyle=G.home.hurtT>0&&Math.sin(t*20)>0?'#ff5a5a':'#fff6e0';ctx.strokeStyle='#6b4a32';ctx.lineWidth=1.5;ctx.beginPath();ctx.rect(x-5,y-5,10,10);ctx.fill();ctx.stroke();ctx.fillStyle='#e8a36a';ctx.beginPath();ctx.moveTo(x-6,y-4);ctx.lineTo(x,y-9);ctx.lineTo(x+6,y-4);ctx.fill()}
  if(G.army.mode==='deploy'){const[x,y]=P(G.army.x,G.army.y);ctx.fillStyle='#ff5a5a';ctx.fillRect(x,y-7,5,4);ctx.fillStyle='#6b4a32';ctx.fillRect(x-.5,y-7,1.5,8)}
  for(const u of G.units)if(!u.dead){const[x,y]=P(u.x,u.y);ctx.fillStyle=u.k==='duck'?'#ffe066':'#ffb86b';ctx.fillRect(x-1.5,y-1.5,3,3)}
@@ -302,7 +350,7 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  const L=[];
  const vx0=cam.x-W/2/T-2,vx1=cam.x+W/2/T+2,vy0=cam.y-H/2/T-2,vy1=cam.y+H/2/T+3;
  for(const d of DECOR)if(d.x>vx0&&d.x<vx1&&d.y>vy0&&d.y<vy1)L.push({y:d.y,f:()=>cachedSpr(d.k,d.x,d.y+.4,d.k==='tree'?1.5:.8)});
- for(const s of SPOTS){const b=G.b[s.id];if(b.lv)L.push({y:s.y+(s.t==='wall'&&s.v?2.7:0),f:()=>{drawBuilding(s,b);if(ns===s){ctx.save();ctx.strokeStyle='#ff8c42';ctx.lineWidth=3;ctx.setLineDash([5,4]);ctx.beginPath();ctx.ellipse(sx(s.x),sy(s.y)+T*.2,T*.95,T*.4,0,0,7);ctx.stroke();ctx.restore()}}})}
+ for(const s of SPOTS){const b=G.b[s.id];if(b.lv){const yy=s.t==='wall'?Math.max(...segsOf(s).map(g=>g.y+(g.v?g.len/2:0))):s.y;L.push({y:yy,f:()=>{drawBuilding(s,b);if(ns===s){ctx.save();ctx.strokeStyle='#ff8c42';ctx.lineWidth=3;ctx.setLineDash([5,4]);ctx.beginPath();ctx.ellipse(sx(s.x),sy(s.y)+T*.2,T*.95,T*.4,0,0,7);ctx.stroke();ctx.restore()}}})}}
  L.push({y:HOME.y+.6,f:()=>{spr(S.house,HOME.x,HOME.y+.8,3.4);const cry=G.home.hurtT>0||G.home.hp<G.home.max*.4,fr=(cry?'cry':G.phase==='day'?'laugh':'idle')+(Math.floor(performance.now()/450)%2),im=babyImg[fr];
   if(im&&im.complete&&im.naturalWidth){const h=T*.94,w=h*im.naturalWidth/im.naturalHeight;ctx.drawImage(im,sx(HOME.x)-w/2,sy(HOME.y+1.95)-h,w,h)}}});
  for(const p of Object.values(G.players))if(!p.dead)L.push({y:p.y,f:()=>drawPlayer(p)});
@@ -329,4 +377,4 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  for(const c of G.coins){const k=Math.min(1,c.t/.7),e=k*k,X0=sx(c.x),Y0=sy(c.y),X=X0+(view.gold.x-X0)*e,Y=Y0+(view.gold.y-Y0)*e-Math.sin(k*Math.PI)*T*1.2;ctx.save();ctx.fillStyle='#ffd23f';ctx.strokeStyle='#b8860b';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,T*.16,0,7);ctx.fill();ctx.stroke();ctx.restore()}
  for(const f of G.floats){ctx.save();ctx.globalAlpha=1-f.t/1.1;ctx.font=`900 ${T*(f.sm?.3:.4)}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#6b4a32';ctx.fillStyle=f.col;ctx.strokeText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.fillText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.restore()}
  if(G.phase==='night')drawOffscreen(W,H);drawMinimap(W,H)}
-window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf};
+window.Game={screenOf:o=>({x:sx(o.x),y:sy(o.y),T}),newGame,step,render,build,startNight,skill,toggleArmy,armyFollow,armyDeploy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf,useMap,flowAt,lineClear,pushOut,rebuildNav,bName,bDist,solidAt,enemySolid};
