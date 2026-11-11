@@ -5,13 +5,14 @@ function saveRec(r){try{localStorage.setItem(REC_KEY,JSON.stringify(r))}catch(e)
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 let G=null,uid=1;
-const hooks={toast:()=>{},end:()=>{},hud:()=>{}};
+const hooks={toast:()=>{},end:()=>{},hud:()=>{},sfx:()=>{}};
+const sfx=k=>hooks.sfx(k);
 
 function newGame(o){const tal=new Set(o.talents||[]);
- const mods={gold:tal.has('piggy')?1.3:1,pet:tal.has('pets')?1.35:1,hp:tal.has('tough')?1.6:1,stone:tal.has('stone')?1.5:1,ehp:tal.has('wolfy')?1.7:1,drop:tal.has('wolfy')?1.5:1};
+ const mods={gold:tal.has('piggy')?1.3:1,pet:tal.has('pets')?1.35:1,hp:tal.has('tough')?1.6:1,stone:tal.has('stone')?1.5:1,ehp:tal.has('wolfy')?1.6:1,edmg:tal.has('wolfy')?1.25:1,count:tal.has('wolfy')?1.3:1,drop:tal.has('wolfy')?1.25:1};
  G={phase:'day',night:0,gold:15+(tal.has('piggy')?10:0),t:0,nightT:0,spawnQ:[],talents:[...tal],mods,
-  home:{hp:300*mods.stone,max:300*mods.stone,cd:0,hurtT:0},players:{},me:o.dog,b:{},enemies:[],units:[],shots:[],fx:[],floats:[],
-  input:{},armyLeader:null,dark:0,stats:{kills:0}};
+  home:{hp:300*mods.stone,max:300*mods.stone,cd:0,hurtT:0},players:{},me:o.dog,b:{},enemies:[],units:[],shots:[],fx:[],floats:[],coins:[],
+  input:{},armyLeader:null,dark:0,shake:0,stats:{kills:0}};
  for(const s of SPOTS)G.b[s.id]={lv:0,hp:0,max:0,cd:0,dead:0};
  addPlayer(o.dog,o.dog,o.weapon);return G}
 function addPlayer(id,dog,weapon){const max=100*G.mods.hp;
@@ -23,21 +24,21 @@ function nextCost(s){const b=G.b[s.id];return b.lv>=3?null:BUILD[s.t].cost[b.lv]
 function nearSpot(p){let best=null,bd=1.7;for(const s of SPOTS){const d=Math.hypot(p.x-s.x,p.y-s.y);if(d<bd){bd=d;best=s}}return best}
 function build(pid,sid){if(G.phase!=='day')return false;const p=G.players[pid],s=spotOf(sid)||nearSpot(p);if(!s)return false;
  const b=G.b[s.id],c=nextCost(s);if(c==null){hooks.toast(BUILD[s.t].name+'已经满级啦');return false}
- if(G.gold<c){hooks.toast('金币不够，还差 '+(c-G.gold)+' 💰');return false}
+ if(G.gold<c){hooks.toast('金币不够，还差 '+(c-G.gold)+' 💰');sfx('poor');return false}
  G.gold-=c;b.lv++;b.max=bMax(s,b.lv);b.hp=b.max;b.dead=0;
- G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});hooks.toast((b.lv===1?'建好了 ':'升级到 '+b.lv+' 级 ')+BUILD[s.t].name+'！');
+ G.fx.push({k:'puff',x:s.x,y:s.y,t:0,life:.6});sfx('build');hooks.toast((b.lv===1?'建好了 ':'升级到 '+b.lv+' 级 ')+BUILD[s.t].name+'！');
  syncUnits();return true}
-function startNight(){if(G.phase!=='day')return;G.phase='night';G.nightT=0;G.spawnQ=waveFor(G.night+1);
+function startNight(){if(G.phase!=='day')return;G.phase='night';G.nightT=0;G.spawnQ=waveFor(G.night+1,G.mods.count);sfx('night');
  hooks.toast('🌙 第 '+(G.night+1)+' 夜，敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来了！')}
-function morning(){G.night++;G.phase='day';
+function morning(){G.night++;G.phase='day';G.coins=[];
  if(G.night>=NIGHTS){G.phase='win';endGame(true);return}
  let pay=4;for(const s of SPOTS){const b=G.b[s.id];if(s.t==='farm'&&b.lv&&!b.dead)pay+=bStat(s,'gold',b.lv)}
  pay=Math.round(pay*G.mods.gold);G.gold+=pay;
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv){b.hp=b.max;b.dead=0}}
  G.home.hp=G.home.max;for(const p of Object.values(G.players)){p.hp=p.max;p.dead=0}
  for(const u of G.units){u.dead=0;u.hp=u.max}
- G.shots=[];hooks.toast('☀️ 天亮啦！菜园和家里收入 +'+pay+' 💰')}
-function endGame(win){const r=loadRec();const was=Object.assign({},r);r.best=Math.max(r.best,G.night);if(win)r.wins++;saveRec(r);hooks.end(win,was,r)}
+ G.shots=[];sfx('morning');hooks.toast('☀️ 天亮啦！菜园和家里收入 +'+pay+' 💰')}
+function endGame(win){sfx(win?'win':'lose');const r=loadRec();const was=Object.assign({},r);r.best=Math.max(r.best,G.night);if(win)r.wins++;saveRec(r);hooks.end(win,was,r)}
 // ---- 小动物士兵 ----
 function syncUnits(){for(const s of SPOTS){if(s.t!=='cats'&&s.t!=='ducks')continue;const b=G.b[s.id];if(!b.lv)continue;const n=bStat(s,'n',b.lv),U=UNITS[BUILD[s.t].unit];
  const mine=G.units.filter(u=>u.home===s.id);
@@ -46,29 +47,33 @@ function syncUnits(){for(const s of SPOTS){if(s.t!=='cats'&&s.t!=='ducks')contin
 function toggleArmy(pid){if(!G.units.length){hooks.toast('先建小猫营或小鸭营吧');return}G.armyLeader=G.armyLeader===pid?null:pid;
  hooks.toast(G.armyLeader?'小动物们跟着'+DOGS[G.players[pid].dog].name+'走！':'小动物们回营地守着')}
 // ---- 战斗 ----
-function hurtEnemy(e,d,stun){if(e.dead)return;e.hp-=d;e.flash=.12;if(stun)e.stun=Math.max(e.stun||0,stun);
- if(e.hp<=0){e.dead=1;const g=Math.round(ENEMIES[e.k].gold*G.mods.drop);G.gold+=g;G.stats.kills++;G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
+function hurtEnemy(e,d,stun,byP){if(e.dead)return;e.hp-=d;e.flash=.12;if(stun)e.stun=Math.max(e.stun||0,stun);
+ if(byP){sfx('hit');if(G.floats.length<70)G.floats.push({x:e.x+(Math.random()-.5)*.4,y:e.y-ENEMIES[e.k].r*2-.3,txt:''+Math.round(d),t:.25,col:'#fff',sm:1})}
+ if(e.hp<=0){e.dead=1;const g=Math.round(ENEMIES[e.k].gold*G.mods.drop);G.gold+=g;G.stats.kills++;sfx('kill');G.floats.push({x:e.x,y:e.y-.8,txt:'+'+g+'💰',t:0,col:'#ffd23f'});G.coins.push({x:e.x,y:e.y-.4,t:0,n:g});G.fx.push({k:'poof',x:e.x,y:e.y,t:0,life:.4,r:ENEMIES[e.k].r})}}
 function enemiesNear(x,y,r){return G.enemies.filter(e=>!e.dead&&Math.hypot(e.x-x,e.y-y)<=r+ENEMIES[e.k].r)}
 function nearestEnemy(x,y,r){let best=null,bd=1e9;for(const e of G.enemies){if(e.dead)continue;const d=Math.hypot(e.x-x,e.y-y)-ENEMIES[e.k].r;if(d<=r&&d<bd){bd=d;best=e}}return best}
-function shoot(from,tgt,dmg,kind,spd=10){G.shots.push({x:from.x,y:from.y-.5,tgt,tx:tgt.x,ty:tgt.y,dmg,kind,spd,t:0})}
+function shoot(from,tgt,dmg,kind,spd=10,byP){G.shots.push({x:from.x,y:from.y-.5,tgt,tx:tgt.x,ty:tgt.y,dmg,kind,spd,t:0,byP})}
 function skill(pid){const p=G.players[pid];if(!p||p.dead||p.skillCd>0||G.phase!=='night')return false;const W=WEAPONS[p.weapon];p.skillCd=W.skill.cd;
- if(p.weapon==='spatula'){for(const e of enemiesNear(p.x,p.y,2.7)){hurtEnemy(e,45);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.9;e.y+=Math.sin(a)*.9}G.fx.push({k:'spin',x:p.x,y:p.y,t:0,life:.45,r:2.7})}
- else if(p.weapon==='frisbee'){for(let i=0;i<10;i++){const a=i/10*Math.PI*2;G.shots.push({x:p.x,y:p.y-.4,vx:Math.cos(a)*9,vy:Math.sin(a)*9,life:.8,dmg:26,kind:'frisbee',hit:new Set(),t:0})}}
- else{for(const e of enemiesNear(p.x,p.y,3.3))hurtEnemy(e,70,1.6);G.fx.push({k:'quake',x:p.x,y:p.y,t:0,life:.6,r:3.3})}
- hooks.toast(W.skill.name+'！');return true}
+ if(p.weapon==='spatula'){for(const e of enemiesNear(p.x,p.y,2.7)){hurtEnemy(e,45,0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.9;e.y+=Math.sin(a)*.9}G.fx.push({k:'spin',x:p.x,y:p.y,t:0,life:.45,r:2.7})}
+ else if(p.weapon==='frisbee'){for(let i=0;i<10;i++){const a=i/10*Math.PI*2;G.shots.push({x:p.x,y:p.y-.4,vx:Math.cos(a)*9,vy:Math.sin(a)*9,life:.8,dmg:26,kind:'frisbee',hit:new Set(),t:0,byP:1})}}
+ else{for(const e of enemiesNear(p.x,p.y,3.3))hurtEnemy(e,70,1.6,1);G.shake=.25;G.fx.push({k:'quake',x:p.x,y:p.y,t:0,life:.6,r:3.3})}
+ sfx('skill');hooks.toast(W.skill.name+'！');return true}
 function playerAttack(p,dt){const W=WEAPONS[p.weapon];p.cd-=dt;p.skillCd=Math.max(0,p.skillCd-dt);p.swing=Math.max(0,p.swing-dt);if(p.cd>0)return;
  const tg=nearestEnemy(p.x,p.y,W.range);if(!tg)return;p.cd=W.cd;p.swing=.25;p.face={x:tg.x-p.x,y:tg.y-p.y};
- if(W.kind==='melee'){enemiesNear(p.x,p.y,W.range).sort((a,b)=>dist(a,p)-dist(b,p)).slice(0,W.maxHit).forEach(e=>hurtEnemy(e,W.dmg));G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.22,r:W.range})}
- else if(W.kind==='ranged')shoot(p,tg,W.dmg,'frisbee',11);
- else{enemiesNear(p.x,p.y,W.range).forEach(e=>hurtEnemy(e,W.dmg,.3));G.fx.push({k:'slam',x:p.x,y:p.y,t:0,life:.35,r:W.range})}}
+ if(W.kind==='melee'){enemiesNear(p.x,p.y,W.range).sort((a,b)=>dist(a,p)-dist(b,p)).slice(0,W.maxHit).forEach(e=>{hurtEnemy(e,W.dmg,0,1);const a=Math.atan2(e.y-p.y,e.x-p.x);e.x+=Math.cos(a)*.15;e.y+=Math.sin(a)*.15});G.fx.push({k:'arc',x:p.x,y:p.y,a:Math.atan2(tg.y-p.y,tg.x-p.x),t:0,life:.22,r:W.range})}
+ else if(W.kind==='ranged')shoot(p,tg,W.dmg,'frisbee',11,1);
+ else{enemiesNear(p.x,p.y,W.range).forEach(e=>hurtEnemy(e,W.dmg,.3,1));G.shake=Math.max(G.shake,.12);G.fx.push({k:'slam',x:p.x,y:p.y,t:0,life:.35,r:W.range})}}
 // 敌人能撞上的东西：建筑（墙是长条），家
 function blocker(e,nx,ny){const r=ENEMIES[e.k].r;
  for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead)continue;
   if(s.t==='wall'){const hl=2.7,ht=.35,dx=Math.abs(nx-s.x),dy=Math.abs(ny-s.y);if(s.v?(dx<ht+r&&dy<hl+r):(dy<ht+r&&dx<hl+r))return s}
   else if(Math.hypot(nx-s.x,ny-s.y)<.75+r)return s}
  return null}
-function hitTarget(e,tg,d){if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1}else if(tg.kind==='b'){const b=G.b[tg.s.id];b.hp-=d;if(b.hp<=0){b.hp=0;b.dead=1;hooks.toast(BUILD[tg.s.t].name+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
- else{const o=tg.o;o.hp-=d;o.flash=.15;if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?6:12;if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 6 秒后回家复活')}}}
+function solidAt(x,y,r){for(const s of SPOTS){const b=G.b[s.id];if(!b.lv||b.dead)continue;
+  if(s.t==='wall'){const dx=Math.abs(x-s.x),dy=Math.abs(y-s.y),along=s.v?dy:dx;if(along<.85)continue; // 中间是门：自己人能走，敌人不能
+   if(s.v?(dx<.35+r&&dy<2.7+r):(dy<.35+r&&dx<2.7+r))return true}else if(Math.hypot(x-s.x,y-s.y)<.6+r)return true}return false}
+function hitTarget(e,tg,d){d*=G.mods.edmg;if(tg.kind==='home'){G.home.hp-=d;G.home.hurtT=1;G.shake=Math.max(G.shake,.15);sfx('home')}else if(tg.kind==='b'){const b=G.b[tg.s.id];b.hp-=d;if(b.hp<=0){b.hp=0;b.dead=1;hooks.toast(BUILD[tg.s.t].name+'被打坏了！明早会修好');G.fx.push({k:'puff',x:tg.s.x,y:tg.s.y,t:0,life:.6})}}
+ else{const o=tg.o;o.hp-=d;o.flash=.15;if(tg.kind==='p')sfx('hurt');if(o.hp<=0){o.hp=0;o.dead=1;o.respawn=tg.kind==='p'?6:12;if(tg.kind==='p')hooks.toast(DOGS[o.dog].name+'被打倒了… 6 秒后回家复活')}}}
 function stepEnemy(e,dt){const E=ENEMIES[e.k];e.cd-=dt;e.flash=Math.max(0,(e.flash||0)-dt);if(e.stun>0){e.stun-=dt;return}
  e.rt-=dt;if(e.rt<=0){e.rt=.4;e.tg=null;let bd=E.aggro;
   for(const p of Object.values(G.players))if(!p.dead){const d=dist(p,e);if(d<bd){bd=d;e.tg={kind:'p',o:p}}}
@@ -78,6 +83,10 @@ function stepEnemy(e,dt){const E=ENEMIES[e.k];e.cd-=dt;e.flash=Math.max(0,(e.fla
  const dx=tx-e.x,dy=ty-e.y,d=Math.hypot(dx,dy);e.moving=false;
  if(d<=E.r+tr+.15){if(e.cd<=0){e.cd=E.cd;e.atk=.2;hitTarget(e,tg,E.dmg)}return}
  const sp=E.spd*dt,nx=e.x+dx/d*sp,ny=e.y+dy/d*sp,bl=blocker(e,nx,ny);
+ if(bl&&bl.t!=='wall'&&!E.smash){ // 绕开塔/兵营/菜园走，不傻站着打
+  let ox=e.x-bl.x,oy=e.y-bl.y,ol=Math.hypot(ox,oy)||1;ox/=ol;oy/=ol;let tx2=-oy,ty2=ox;if(tx2*dx+ty2*dy<0){tx2=-tx2;ty2=-ty2}
+  const ax=e.x+(tx2+ox*.35)*sp,ay=e.y+(ty2+oy*.35)*sp,b2=blocker(e,ax,ay);
+  if(!b2||b2===bl&&Math.hypot(ax-bl.x,ay-bl.y)>ol){e.x=ax;e.y=ay;e.moving=true;e.ph+=dt*9;e.dir=tx2<0?2:3;return}}
  if(bl){if(e.cd<=0){e.cd=E.cd;e.atk=.2;hitTarget(e,{kind:'b',s:bl},E.dmg*(E.smash?1.6:1))}return}
  e.x=nx;e.y=ny;e.moving=true;e.ph+=dt*9;if(Math.abs(dx)>.05)e.dir=dx<0?2:3}
 function unitAnchor(u){const L=G.armyLeader&&G.players[G.armyLeader];const a=u.slot*2.4+(u.k==='duck'?1.2:0);
@@ -93,7 +102,7 @@ function stepUnit(u,dt){const U=UNITS[u.k],s=spotOf(u.home),b=G.b[s.id];u.flash=
 function stepPlayer(p,dt){const inp=G.input[p.id]||{x:0,y:0};p.flash=Math.max(0,(p.flash||0)-dt);
  if(p.dead){p.respawn-=dt;if(p.respawn<=0){p.dead=0;p.hp=p.max;p.x=HOME.x;p.y=HOME.y+2}return}
  const m=Math.hypot(inp.x,inp.y);p.moving=m>.1;
- if(p.moving){const sp=4.2*dt*Math.min(1,m);p.x=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);p.y=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);p.ph+=dt*11;
+ if(p.moving){const sp=4.2*dt*Math.min(1,m),inside=solidAt(p.x,p.y,.3);const nx=clamp(p.x+inp.x/Math.max(1,m)*sp,.5,MAP_W-.5);if(inside||!solidAt(nx,p.y,.3))p.x=nx;const ny=clamp(p.y+inp.y/Math.max(1,m)*sp,.5,MAP_H-.5);if(inside||!solidAt(p.x,ny,.3))p.y=ny;p.ph+=dt*11;
   p.dir=Math.abs(inp.x)>Math.abs(inp.y)?(inp.x<0?2:3):(inp.y<0?1:0);p.face={x:inp.x,y:inp.y};
   if(Math.hypot(p.x-HOME.x,p.y-HOME.y)<HOME.r){const a=Math.atan2(p.y-HOME.y,p.x-HOME.x);p.x=HOME.x+Math.cos(a)*HOME.r;p.y=HOME.y+Math.sin(a)*HOME.r}}
  if(G.phase==='night')playerAttack(p,dt);else{p.skillCd=0}}
@@ -112,17 +121,22 @@ function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark
  G.home.hurtT=Math.max(0,G.home.hurtT-dt);
  for(const u of G.units)stepUnit(u,dt);
  // 子弹
- for(const s of G.shots){s.t+=dt;if(s.vx!=null){s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;for(const e of enemiesNear(s.x,s.y,.35))if(!s.hit.has(e.id)){s.hit.add(e.id);hurtEnemy(e,s.dmg)}if(s.life<=0)s.done=1;continue}
+ for(const s of G.shots){s.t+=dt;if(s.vx!=null){s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;for(const e of enemiesNear(s.x,s.y,.35))if(!s.hit.has(e.id)){s.hit.add(e.id);hurtEnemy(e,s.dmg,0,s.byP)}if(s.life<=0)s.done=1;continue}
   if(s.tgt&&!s.tgt.dead){s.tx=s.tgt.x;s.ty=s.tgt.y-.3}const dx=s.tx-s.x,dy=s.ty-s.y,d=Math.hypot(dx,dy),mv=s.spd*dt;
-  if(d<=mv+.1){s.done=1;if(s.tgt&&!s.tgt.dead)hurtEnemy(s.tgt,s.dmg)}else{s.x+=dx/d*mv;s.y+=dy/d*mv}}
+  if(d<=mv+.1){s.done=1;if(s.tgt&&!s.tgt.dead)hurtEnemy(s.tgt,s.dmg,0,s.byP)}else{s.x+=dx/d*mv;s.y+=dy/d*mv}}
  G.shots=G.shots.filter(s=>!s.done);G.enemies=G.enemies.filter(e=>!e.dead);
- for(const f of G.fx)f.t+=dt;G.fx=G.fx.filter(f=>f.t<f.life);for(const f of G.floats)f.t+=dt;G.floats=G.floats.filter(f=>f.t<1.1);
+ for(const c of G.coins){c.t+=dt;if(c.t>=.7&&!c.done){c.done=1;sfx('coin');hooks.coin&&hooks.coin()}}G.coins=G.coins.filter(c=>!c.done);G.shake=Math.max(0,G.shake-dt);for(const f of G.fx)f.t+=dt;G.fx=G.fx.filter(f=>f.t<f.life);for(const f of G.floats)f.t+=dt;G.floats=G.floats.filter(f=>f.t<1.1);
  if(G.phase==='night'&&!G.spawnQ.length&&!G.enemies.length)morning()}
 // ================= 画面 =================
 const cv=document.getElementById('map'),ctx=cv.getContext('2d');let VW=0,VH=0,T=36,DPR=1;const cam={x:HOME.x,y:HOME.y};
-function resize(){DPR=Math.min(2,window.devicePixelRatio||1);VW=cv.clientWidth||innerWidth;VH=cv.clientHeight||innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;T=Math.max(26,Math.min(48,Math.min(VW,VH)/11))}
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);VW=cv.clientWidth||innerWidth;VH=cv.clientHeight||innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;T=Math.max(26,Math.min(48,Math.min(VW,VH)/(VW>VH?12.5:11)))}
 addEventListener('resize',resize);resize();
-const sx=x=>(x-cam.x)*T+VW/2,sy=y=>(y-cam.y)*T+VH/2;
+let OX=0,OY=0;const view={top:0,gold:{x:40,y:24},guide:null};
+const sx=x=>(x-cam.x)*T+VW/2+OX,sy=y=>(y-cam.y)*T+VH/2+OY;
+// 静态装饰（树/石头/花）预先画到小画布上，省 CPU
+const sprCache={};function cachedSpr(k,x,y,size){const key=k+'|'+size+'|'+T+'|'+DPR;let c=sprCache[key];
+ if(!c){c=document.createElement('canvas');const u=size*T*DPR;c.width=Math.ceil(u*1.2);c.height=Math.ceil(u*1.15);const g=c.getContext('2d');g.scale(u,u);g.translate(.1,.1);S[k](g);sprCache[key]=c}
+ ctx.drawImage(c,sx(x)-size*T/2-.1*size*T,sy(y)-size*T*.95-.1*size*T,c.width/DPR,c.height/DPR)}
 function spr(fn,x,y,size,...a){ctx.save();ctx.translate(sx(x)-size*T/2,sy(y)-size*T*.95);ctx.scale(size*T,size*T);fn(ctx,...a);ctx.restore()}
 let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
 const DECOR=[];(()=>{for(let i=0;i<260&&DECOR.length<95;i++){const x=1+rnd()*(MAP_W-2),y=1+rnd()*(MAP_H-2);
@@ -163,8 +177,8 @@ function bar(x,y,w,frac,col){const X=sx(x)-w*T/2,Y=sy(y);ctx.fillStyle='rgba(255
 function stars(x,y,n){ctx.font=`900 ${T*.32}px sans-serif`;ctx.textAlign='center';ctx.fillStyle='#ffd23f';ctx.strokeStyle='#6b4a32';ctx.lineWidth=2.5;const t='★'.repeat(n);ctx.strokeText(t,sx(x),sy(y));ctx.fillText(t,sx(x),sy(y))}
 function drawBuilding(s,b){const X=sx(s.x),Y=sy(s.y),u=T;ctx.save();if(b.dead)ctx.globalAlpha=.45;ctx.lineWidth=2;ctx.strokeStyle='#3b2a20';ctx.lineJoin='round';
  if(s.t==='wall'){const L=5.4,n=b.lv===1?9:7;for(let i=0;i<n;i++){const o=-L/2+L*(i+.5)/n;const px=s.v?X:X+o*u,py=s.v?Y+o*u:Y;
-   if(b.lv===1){ctx.fillStyle='#c98b52';ctx.beginPath();ctx.roundRect(px-u*.12,py-u*.55,u*.24,u*.7,u*.08);ctx.fill();ctx.stroke()}
-   else{ctx.fillStyle=b.lv===2?'#b9bfc8':'#9aa3ae';const w=s.v?u*.7:u*L/n*.92,h=s.v?u*L/n*.92:u*.7;ctx.beginPath();ctx.roundRect(px-w/2,py-h/2-u*.25,w,h,u*.1);ctx.fill();ctx.stroke()}}
+   const gate=Math.abs(o)<.85;if(b.lv===1){ctx.fillStyle=gate?'#f2c28a':'#c98b52';ctx.beginPath();ctx.roundRect(px-u*.12,py-u*.55,u*.24,u*.7,u*.08);ctx.fill();ctx.stroke()}
+   else{ctx.fillStyle=gate?'#d9a066':b.lv===2?'#b9bfc8':'#9aa3ae';const w=s.v?u*.7:u*L/n*.92,h=s.v?u*L/n*.92:u*.7;ctx.beginPath();ctx.roundRect(px-w/2,py-h/2-u*.25,w,h,u*.1);ctx.fill();ctx.stroke()}}
   if(b.lv===3){ctx.fillStyle='#ff8c5a';[-1,1].forEach(q=>{const fx=s.v?X:X+q*L/2*u*.8,fy=s.v?Y+q*L/2*u*.8:Y;ctx.fillRect(fx-1,fy-u*1.1,2,u*.6);ctx.beginPath();ctx.moveTo(fx+1,fy-u*1.1);ctx.lineTo(fx+u*.35,fy-u*.95);ctx.lineTo(fx+1,fy-u*.8);ctx.fill()})}}
  else if(s.t==='tower'){const h=u*(1.3+b.lv*.25);ctx.fillStyle='rgba(60,40,20,.25)';ctx.beginPath();ctx.ellipse(X,Y+u*.15,u*.55,u*.16,0,0,7);ctx.fill();
   ctx.fillStyle='#b98257';[-1,1].forEach(q=>{ctx.beginPath();ctx.moveTo(X+q*u*.4,Y+u*.15);ctx.lineTo(X+q*u*.25,Y-h+u*.3);ctx.lineTo(X+q*u*.12,Y-h+u*.3);ctx.lineTo(X+q*u*.25,Y+u*.15);ctx.closePath();ctx.fill();ctx.stroke()});
@@ -179,16 +193,21 @@ function drawBuilding(s,b){const X=sx(s.x),Y=sy(s.y),u=T;ctx.save();if(b.dead)ct
  else if(s.t==='farm'){ctx.fillStyle='#b5835a';ctx.beginPath();ctx.roundRect(X-u*.85,Y-u*.6,u*1.7,u*1.1,u*.18);ctx.fill();ctx.stroke();ctx.restore();
   const n=b.lv*2;for(let i=0;i<n;i++){const cx=s.x-.55+(i%3)*.55,cy=s.y-.35+Math.floor(i/3)*.45;spr((c)=>S.crop(c,'carrot',2),cx,cy+.25,.55)}ctx.save();stars(s.x,s.y+.85,b.lv)}
  ctx.restore()}
-function drawEmptySpot(s,near){const X=sx(s.x),Y=sy(s.y);ctx.save();ctx.setLineDash([5,4]);ctx.lineWidth=2.5;ctx.strokeStyle=near?'#ff8c42':'rgba(255,248,231,.9)';ctx.fillStyle=near?'rgba(255,200,120,.35)':'rgba(255,248,231,.22)';
+function drawEmptySpot(s,near){const X=sx(s.x),Y=sy(s.y),c=nextCost(s),ok=G.phase==='day'&&c!=null&&G.gold>=c,pulse=.5+.5*Math.sin(performance.now()/300);ctx.save();ctx.setLineDash([6,4]);ctx.lineWidth=near?3.5:2.5;
+ ctx.strokeStyle=near?'#ff8c42':ok?`rgba(255,210,63,${.6+.4*pulse})`:'rgba(255,248,231,.8)';ctx.fillStyle=near?'rgba(255,200,120,.4)':ok?'rgba(255,230,140,.3)':'rgba(255,248,231,.18)';
  ctx.beginPath();if(s.t==='wall'){const L=5.4*T,h=.6*T;s.v?ctx.roundRect(X-h/2,Y-L/2,h,L,8):ctx.roundRect(X-L/2,Y-h/2,L,h,8)}else ctx.ellipse(X,Y,T*.8,T*.55,0,0,7);ctx.fill();ctx.stroke();ctx.setLineDash([]);
- ctx.font=`900 ${T*.34}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#7a4b1d';ctx.fillText(BUILD[s.t].name,X,Y);ctx.restore()}
+ ctx.font=`900 ${T*.36}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='rgba(255,255,255,.85)';const t1=BUILD[s.t].name,t2=c+' 💰';
+ ctx.strokeText(t1,X,Y-T*.16);ctx.fillStyle='#7a4b1d';ctx.fillText(t1,X,Y-T*.16);ctx.font=`900 ${T*.3}px sans-serif`;ctx.strokeText(t2,X,Y+T*.2);ctx.fillStyle=ok?'#d9822b':'#a08a70';ctx.fillText(t2,X,Y+T*.2);ctx.restore()}
 function drawWarn(d){const D=DIRS[d],x=clamp(D.x,1,MAP_W-1),y=clamp(D.y,1,MAP_H-1),X=sx(x),Y=sy(y),p=1+Math.sin(performance.now()/200)*.08;
  ctx.save();ctx.translate(X,Y);ctx.scale(p,p);ctx.fillStyle='#f06464';ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,T*.5,0,7);ctx.fill();ctx.stroke();
  ctx.fillStyle='#fff';ctx.font=`900 ${T*.6}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('!',0,2);ctx.restore()}
 function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&G.players[G.me];
- if(me){const hw=W/2/T,hh=H/2/T;cam.x=MAP_W<hw*2?MAP_W/2:clamp(me.x,hw,MAP_W-hw);cam.y=MAP_H<hh*2?MAP_H/2:clamp(me.y,hh-1,MAP_H-hh+1.5)}
+ OX=0;OY=view.top/2;if(G&&G.shake>0){OX=(Math.random()-.5)*G.shake*30;OY+=(Math.random()-.5)*G.shake*30}
+ if(me){const hw=W/2/T,hh=(H-view.top)/2/T,k=W>H?.4:.25; // 镜头往家那边偏一点，横屏也能看到家
+  let tx=me.x+(HOME.x-me.x)*k,ty=me.y+(HOME.y-me.y)*k;tx=clamp(tx,me.x-hw+1.5,me.x+hw-1.5);ty=clamp(ty,me.y-hh+1.8,me.y+hh-1.2);
+  cam.x=MAP_W<hw*2?MAP_W/2:clamp(tx,hw,MAP_W-hw);cam.y=MAP_H<hh*2?MAP_H/2:clamp(ty,hh-1,MAP_H-hh+1.5)}
  ctx.fillStyle='#5fae58';ctx.fillRect(0,0,W,H);
- const x0=Math.max(0,Math.floor(cam.x-W/2/T)),x1=Math.min(MAP_W,Math.ceil(cam.x+W/2/T)),y0=Math.max(0,Math.floor(cam.y-H/2/T)),y1=Math.min(MAP_H,Math.ceil(cam.y+H/2/T));
+ const x0=Math.max(0,Math.floor(cam.x-W/2/T)),x1=Math.min(MAP_W,Math.ceil(cam.x+W/2/T)),y0=Math.max(0,Math.floor(cam.y-H/2/T-1)),y1=Math.min(MAP_H,Math.ceil(cam.y+H/2/T+1));
  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){ctx.fillStyle=(x+y)%2?'#8fd27a':'#86cb71';ctx.fillRect(sx(x),sy(y),T+1,T+1)}
  // 路
  ctx.fillStyle='#ecd29a';ctx.fillRect(sx(16),sy(0),T*2,T*MAP_H);ctx.fillRect(sx(0),sy(16),T*MAP_W,T*2);ctx.beginPath();ctx.arc(sx(HOME.x),sy(HOME.y),T*3.2,0,7);ctx.fill();
@@ -197,7 +216,8 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  const ns=G.phase==='day'&&me&&!me.dead?nearSpot(me):null;
  for(const s of SPOTS)if(!G.b[s.id].lv)drawEmptySpot(s,ns===s);
  const L=[];
- for(const d of DECOR)L.push({y:d.y,f:()=>spr(S[d.k],d.x,d.y+.4,d.k==='tree'?1.5:.8)});
+ const vx0=cam.x-W/2/T-2,vx1=cam.x+W/2/T+2,vy0=cam.y-H/2/T-2,vy1=cam.y+H/2/T+3;
+ for(const d of DECOR)if(d.x>vx0&&d.x<vx1&&d.y>vy0&&d.y<vy1)L.push({y:d.y,f:()=>cachedSpr(d.k,d.x,d.y+.4,d.k==='tree'?1.5:.8)});
  for(const s of SPOTS){const b=G.b[s.id];if(b.lv)L.push({y:s.y+(s.t==='wall'&&s.v?2.7:0),f:()=>{drawBuilding(s,b);if(ns===s){ctx.save();ctx.strokeStyle='#ff8c42';ctx.lineWidth=3;ctx.setLineDash([5,4]);ctx.beginPath();ctx.ellipse(sx(s.x),sy(s.y)+T*.2,T*.95,T*.4,0,0,7);ctx.stroke();ctx.restore()}}})}
  L.push({y:HOME.y+.6,f:()=>{spr(S.house,HOME.x,HOME.y+.8,3.4);const cry=G.home.hurtT>0||G.home.hp<G.home.max*.4,fr=(cry?'cry':G.phase==='day'?'laugh':'idle')+(Math.floor(performance.now()/450)%2),im=babyImg[fr];
   if(im&&im.complete&&im.naturalWidth){const h=T*1.25,w=h*im.naturalWidth/im.naturalHeight;ctx.drawImage(im,sx(HOME.x)-w/2,sy(HOME.y+1.95)-h,w,h)}}});
@@ -220,5 +240,7 @@ function render(){const W=VW,H=VH;ctx.setTransform(DPR,0,0,DPR,0,0);const me=G&&
  for(const u of G.units)if(!u.dead&&u.hp<u.max)bar(u.x,u.y-.85,.6,u.hp/u.max);
  for(const p of Object.values(G.players))if(!p.dead){ctx.font=`900 ${T*.3}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#fff';ctx.fillStyle='#7a4b1d';ctx.strokeText(DOGS[p.dog].name,sx(p.x),sy(p.y-1.45));ctx.fillText(DOGS[p.dog].name,sx(p.x),sy(p.y-1.45));if(p.hp<p.max)bar(p.x,p.y-1.35,.9,p.hp/p.max)}
  if(G.phase==='day')for(const d of nightDirs(G.night+1))drawWarn(d);
- for(const f of G.floats){ctx.save();ctx.globalAlpha=1-f.t/1.1;ctx.font=`900 ${T*.4}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#6b4a32';ctx.fillStyle=f.col;ctx.strokeText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.fillText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.restore()}}
-window.Game={newGame,step,render,build,startNight,skill,toggleArmy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer};
+ if(view.guide&&G.phase==='day'){const s=spotOf(view.guide);if(s){const X=sx(s.x),Y=sy(s.y)-T*(1.3+.2*Math.sin(performance.now()/180));ctx.save();ctx.fillStyle='#ff8c42';ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(X,Y+T*.45);ctx.lineTo(X-T*.35,Y);ctx.lineTo(X-T*.14,Y);ctx.lineTo(X-T*.14,Y-T*.4);ctx.lineTo(X+T*.14,Y-T*.4);ctx.lineTo(X+T*.14,Y);ctx.lineTo(X+T*.35,Y);ctx.closePath();ctx.stroke();ctx.fill();ctx.restore()}}
+ for(const c of G.coins){const k=Math.min(1,c.t/.7),e=k*k,X0=sx(c.x),Y0=sy(c.y),X=X0+(view.gold.x-X0)*e,Y=Y0+(view.gold.y-Y0)*e-Math.sin(k*Math.PI)*T*1.2;ctx.save();ctx.fillStyle='#ffd23f';ctx.strokeStyle='#b8860b';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,T*.16,0,7);ctx.fill();ctx.stroke();ctx.restore()}
+ for(const f of G.floats){ctx.save();ctx.globalAlpha=1-f.t/1.1;ctx.font=`900 ${T*(f.sm?.3:.4)}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#6b4a32';ctx.fillStyle=f.col;ctx.strokeText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.fillText(f.txt,sx(f.x),sy(f.y-f.t*.8));ctx.restore()}}
+window.Game={newGame,step,render,build,startNight,skill,toggleArmy,nearSpot,nextCost,hooks,loadRec,saveRec,get G(){return G},resize,critter,addPlayer,view,spotOf};

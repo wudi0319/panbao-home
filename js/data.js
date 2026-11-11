@@ -13,7 +13,7 @@ const TALENTS={
  pets:{name:'小动物加油',ic:'💪',desc:'小猫小鸭血量和攻击 +35%'},
  tough:{name:'结实身体',ic:'❤️',desc:'自己血量 +60%'},
  stone:{name:'坚固的家',ic:'🏠',desc:'家和城墙血量 +50%',unlock:'n3'},
- wolfy:{name:'挑战：狼来了',ic:'🐺',desc:'敌人血量 +70%，掉落金币 ×1.5',challenge:1,unlock:'n3'}};
+ wolfy:{name:'挑战：狼来了',ic:'🐺',desc:'敌人更多（+30%）、血量 +60%、攻击 +25%，金币 ×1.25',challenge:1,unlock:'n3'}};
 // 建筑每级数值（下标 0 = 1级）
 const BUILD={
  wall:{name:'城墙',ic:'🧱',cost:[4,8,14],hp:[150,300,520]},
@@ -39,7 +39,7 @@ const DIRS={N:{x:17,y:-.5,cn:'北'},S:{x:17,y:MAP_H+.5,cn:'南'},W:{x:-.5,y:17,c
 const NIGHTS=7;
 function nightDirs(n){return[['S'],['S','E'],['S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W'],['N','S','E','W']][n-1]}
 // 第 n 晚的出怪表：[{t 秒, dir, k}]
-function waveFor(n){const dirs=nightDirs(n),out=[],dur=22+n*5;
- const add=(k,cnt,t0=0,t1=dur)=>{for(let i=0;i<cnt;i++)out.push({t:t0+(t1-t0)*(cnt>1?i/(cnt-1):.5)+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
+function waveFor(n,cm=1){const dirs=nightDirs(n),out=[],dur=22+n*5;
+ const add=(k,c0,t0=0,t1=dur)=>{const cnt=k==='boss'?c0:Math.round(c0*cm);for(let i=0;i<cnt;i++)out.push({t:t0+(t1-t0)*(cnt>1?i/(cnt-1):.5)+Math.random()*1.5,dir:dirs[(i+out.length)%dirs.length],k})};
  add('raccoon',4+n*2);if(n>=2)add('wolf',n*2-1,4);if(n>=3)add('bear',n-2,8);if(n===NIGHTS)add('boss',1,dur*.6,dur*.6);
  return out.sort((a,b)=>a.t-b.t)}

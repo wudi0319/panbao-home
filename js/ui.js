@@ -17,52 +17,79 @@ $('pickWeapon').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b
 $('pickTalent').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.classList.contains('lock'))return toast('还没解锁哦');const k=b.dataset.t,i=sel.talents.indexOf(k);
  if(i>=0)sel.talents.splice(i,1);else{if(sel.talents.length>=2)sel.talents.shift();sel.talents.push(k)}renderStart()};
 $('unlockAll').onchange=renderStart;
-$('goBtn').onclick=()=>{Game.newGame(sel);$('start').classList.add('hidden');$('end').classList.add('hidden');$('hMe').textContent=DOGS[sel.dog].ic;toast('天亮了，走到虚线框旁边建造，保护胖宝！')};
-$('againBtn').onclick=()=>{$('end').classList.add('hidden');renderStart();$('start').classList.remove('hidden')};
-let toastT;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
-Game.hooks.toast=toast;
+$('goBtn').onclick=()=>{Game.newGame(sel);paused=false;$('pause').classList.add('hidden');$('start').classList.add('hidden');$('end').classList.add('hidden');$('hMe').textContent=DOGS[sel.dog].ic;tut.start();SFX.play('click');measure()};
+$('againBtn').onclick=()=>{SFX.play('click');$('end').classList.add('hidden');renderStart();$('start').classList.remove('hidden')};
+let toastT;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400)}
+Game.hooks.toast=toast;Game.hooks.sfx=k=>SFX.play(k);Game.hooks.coin=()=>{const g=$('hGold');g.classList.remove('bump');void g.offsetWidth;g.classList.add('bump')};
 Game.hooks.end=(win,was,r)=>{const G=Game.G;$('endIcon').textContent=win?'🏆':'😭';$('endTitle').textContent=win?'胖宝安全啦！':'家被攻破了…';
  $('endText').textContent=win?`守住了全部 ${NIGHTS} 个晚上，打倒 ${G.stats.kills} 个敌人！`:`守住了 ${G.night} 夜，打倒 ${G.stats.kills} 个敌人。再试一次吧！`;
  const nu=[];if(r.wins>0&&!(was.wins>0))nu.push('🦴 骨头棒槌');if(r.best>=3&&!(was.best>=3))nu.push('🏠 坚固的家','🐺 挑战：狼来了');
  $('endUnlock').textContent=nu.length?'新解锁：'+nu.join('、'):'';setTimeout(()=>$('end').classList.remove('hidden'),600)};
 // ---- 按钮 ----
 const me=()=>Game.G&&Game.G.players[Game.G.me];
-$('buildBtn').onclick=()=>{const p=me();if(p)Game.build(p.id)};
-$('nightBtn').onclick=()=>Game.startNight();
-$('skillBtn').onclick=()=>{const p=me();if(p&&p.skillCd<=0)Game.skill(p.id)};
-$('armyBtn').onclick=()=>{const p=me();if(p)Game.toggleArmy(p.id)};
-// ---- 摇杆（同小岛）+ 键盘 ----
-const joy=$('joy'),knob=$('knob');let jv={x:0,y:0},jid=null;const keys=new Set();
-function joyMove(e){const r=joy.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const m=Math.hypot(dx,dy),R=r.width/2-12;
- if(m>R){dx=dx/m*R;dy=dy/m*R}knob.style.transform=`translate(${dx}px,${dy}px)`;jv={x:dx/R,y:dy/R}}
-joy.addEventListener('pointerdown',e=>{jid=e.pointerId;joy.setPointerCapture(jid);joyMove(e)});
-joy.addEventListener('pointermove',e=>{if(e.pointerId===jid)joyMove(e)});
-const joyEnd=e=>{if(e.pointerId!==jid)return;jid=null;jv={x:0,y:0};knob.style.transform=''};
-joy.addEventListener('pointerup',joyEnd);joy.addEventListener('pointercancel',joyEnd);
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys.add(k);if(e.repeat)return;
+const tap=(id,fn)=>$(id).addEventListener('click',e=>{e.preventDefault();fn()});
+tap('buildBtn',()=>{const p=me();if(p&&Game.build(p.id))tut.on('build')});
+tap('nightBtn',()=>{Game.startNight();tut.on('night')});
+tap('skillBtn',()=>{const p=me();if(p&&p.skillCd<=0&&Game.skill(p.id))tut.on('skill')});
+tap('armyBtn',()=>{const p=me();if(p)Game.toggleArmy(p.id);SFX.play('click')});
+// ---- 暂停 / 音效 ----
+let paused=false;
+function setPause(v){const G=Game.G;if(!G||!$('start').classList.contains('hidden')||G.phase==='win'||G.phase==='lose')v=false;paused=v;$('pause').classList.toggle('hidden',!v);jv={x:0,y:0};knob.style.transform='';keys.clear()}
+function muteLabel(){$('muteBtn').textContent=SFX.muted?'🔇 音效：关':'🔊 音效：开';$('pauseBtn').dataset.m=SFX.muted?'1':''}
+tap('pauseBtn',()=>{SFX.play('click');setPause(!paused)});tap('resumeBtn',()=>{SFX.play('click');setPause(false)});
+tap('muteBtn',()=>{SFX.setMuted(!SFX.muted);muteLabel();SFX.play('click')});
+tap('quitBtn',()=>{setPause(false);Game.G.phase='lose';$('end').classList.add('hidden');renderStart();$('start').classList.remove('hidden')});
+muteLabel();
+document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true)});
+// ---- 摇杆：左半屏任意位置按下都能出摇杆（浮动摇杆），键盘 WASD ----
+const joy=$('joy'),knob=$('knob'),stage=$('stage');let jv={x:0,y:0},jid=null;const keys=new Set();
+function joyMove(e){const r=joy.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const m=Math.hypot(dx,dy),R=r.width/2-10;
+ if(m>R){dx=dx/m*R;dy=dy/m*R}knob.style.transform=`translate(${dx}px,${dy}px)`;const n=Math.min(1,m/R*1.15);jv=m<4?{x:0,y:0}:{x:dx/m*n,y:dy/m*n};tut.on('move')}
+function joyStart(e,float){if(jid!==null||paused)return;jid=e.pointerId;if(float){joy.classList.add('float');joy.style.left=(e.clientX-joy.offsetWidth/2)+'px';joy.style.top=(e.clientY-joy.offsetHeight/2)+'px';joy.style.bottom='auto'}
+ try{(float?$('map'):joy).setPointerCapture(jid)}catch(_){}joyMove(e)}
+const joyEnd=e=>{if(e.pointerId!==jid)return;jid=null;jv={x:0,y:0};knob.style.transform='';joy.classList.remove('float');joy.style.left=joy.style.top=joy.style.bottom=''};
+joy.addEventListener('pointerdown',e=>{e.preventDefault();joyStart(e,false)});
+$('map').addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.5&&e.clientY>gview().top+10)joyStart(e,true)});
+for(const el of[joy,$('map')]){el.addEventListener('pointermove',e=>{if(e.pointerId===jid)joyMove(e)});el.addEventListener('pointerup',joyEnd);el.addEventListener('pointercancel',joyEnd)}
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='p'||k==='escape'){if(!e.repeat)setPause(!paused);return}if(paused)return;keys.add(k);if(e.repeat)return;
+ if(['w','a','s','d','arrowleft','arrowright','arrowup','arrowdown'].includes(k))tut.on('move');
  if(k==='e'||k==='enter')$('buildBtn').classList.contains('hidden')||$('buildBtn').click();
  if(k===' '){e.preventDefault();$('skillBtn').classList.contains('hidden')||$('skillBtn').click()}
  if(k==='n')$('nightBtn').classList.contains('hidden')||$('nightBtn').click();if(k==='f')$('armyBtn').classList.contains('hidden')||$('armyBtn').click()});
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));addEventListener('blur',()=>keys.clear());
 function readInput(){let x=jv.x,y=jv.y;if(keys.has('a')||keys.has('arrowleft'))x-=1;if(keys.has('d')||keys.has('arrowright'))x+=1;if(keys.has('w')||keys.has('arrowup'))y-=1;if(keys.has('s')||keys.has('arrowdown'))y+=1;
  const m=Math.hypot(x,y);return m>1?{x:x/m,y:y/m}:{x,y}}
-// ---- HUD ----
-let hudKey='';
+// ---- 新手引导（只在第一次玩时出现，存在手机里） ----
+const TUT_KEY='panbao-tut-v1';
+const tut={step:-1,start(){this.step=localStorage.getItem(TUT_KEY)?-1:0;if(this.step<0)toast('天亮了，走到虚线框旁边建造，保护胖宝！')},
+ on(ev){const need=['move','build','night','skill'][this.step];if(ev!==need)return;this.step++;if(this.step>=4){this.step=-1;localStorage.setItem(TUT_KEY,'1');toast('👍 学会啦！守住 7 个晚上就赢')}},
+ text(G){if(this.step<0)return'';if(this.step===2&&G.phase==='night')this.step=3;if(this.step===3&&G.phase==='day'){this.step=-1;localStorage.setItem(TUT_KEY,'1');return''}
+  return['👈 按住屏幕左边拖动，就能走路','走到闪光的虚线框旁边，点右下角「建造」','建好了！准备好就点「🌙 开始入夜」','敌人来了！靠近会自动打，点「'+WEAPONS[me().weapon].skill.name+'」放大招'][this.step]}};
+function guideSpot(G,p){let best=null,bd=1e9;for(const s of SPOTS){const b=G.b[s.id],c=Game.nextCost(s);if(b.lv||c==null||c>G.gold)continue;const d=Math.hypot(s.x-p.x,s.y-p.y);if(d<bd){bd=d;best=s}}return best}
+// ---- HUD（只在内容变化时改 DOM） ----
+const setT=(id,v)=>{const el=$(id);if(el._v!==v){el._v=v;el.textContent=v}};
+const setH=(id,h)=>{const el=$(id);if(el._h!==h){el._h=h;el.classList.toggle('hidden',h)}};
+const setW=(id,w)=>{const el=$(id);w=Math.round(w)+'%';if(el._w!==w){el._w=w;el.style.width=w;el.style.background=parseFloat(w)<30?'#ff5a5a':parseFloat(w)<60?'#ffb347':'#6fd07a'}};
+function gview(){return Game.view}
+function measure(){const h=$('hud').getBoundingClientRect(),g=$('hGold').getBoundingClientRect();Game.view.top=h.bottom;Game.view.gold={x:g.left+g.width/2,y:g.top+g.height/2}}
+addEventListener('resize',()=>setTimeout(measure,50));
 function hud(){const G=Game.G,p=me();if(!G||!p)return;const day=G.phase==='day';
- $('hGold').textContent='💰 '+G.gold;$('hNight').textContent=day?`☀️ 第 ${G.night+1} 天 · 共 ${NIGHTS} 夜`:G.phase==='night'?`🌙 第 ${G.night+1} 夜 / ${NIGHTS}`:G.phase==='win'?'🏆 通关啦':'💔 失败';
- $('hHome').style.width=(100*G.home.hp/G.home.max)+'%';$('hHp').style.width=(p.dead?0:100*p.hp/p.max)+'%';
- const s=day&&!p.dead?Game.nearSpot(p):null,bb=$('buildBtn');
- if(s){const b=G.b[s.id],c=Game.nextCost(s);bb.classList.remove('hidden');bb.textContent=c==null?`${BUILD[s.t].ic} ${BUILD[s.t].name} 已满级`:`${BUILD[s.t].ic} ${b.lv?'升级':'建造'}${BUILD[s.t].name}${b.lv?' → '+(b.lv+1)+'级':''} 💰${c}`;bb.classList.toggle('poor',c==null||G.gold<c)}else bb.classList.add('hidden');
- $('nightBtn').classList.toggle('hidden',!day);
- const W=WEAPONS[p.weapon],sk=$('skillBtn');sk.classList.toggle('hidden',G.phase!=='night');$('skillName').textContent=W.skill.name;$('skillCd').textContent=p.skillCd>0?Math.ceil(p.skillCd):'';
- const ab=$('armyBtn');ab.classList.toggle('hidden',!G.units.length);ab.textContent=G.armyLeader===p.id?'🏕️ 回营地':'🐱 跟我来';
- let h='';if(day)h=s?'点右下角按钮建造 / 升级':'今晚敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来 · 准备好就入夜';
- else if(G.phase==='night')h=p.dead?`${DOGS[p.dog].name}复活中… ${Math.ceil(p.respawn)}`:`敌人还剩 ${G.enemies.length+G.spawnQ.length} 个 · 靠近敌人会自动攻击`;
- $('hint').textContent=h}
+ setT('hGold','💰 '+G.gold);setT('hNight',day?`☀️ 第 ${G.night+1} 天 · 共 ${NIGHTS} 夜`:G.phase==='night'?`🌙 第 ${G.night+1} 夜 / ${NIGHTS}`:G.phase==='win'?'🏆 通关啦':'💔 失败');
+ setW('hHome',100*G.home.hp/G.home.max);setW('hHp',p.dead?0:100*p.hp/p.max);
+ const s=day&&!p.dead?Game.nearSpot(p):null;
+ if(s){const b=G.b[s.id],c=Game.nextCost(s);setH('buildBtn',false);setT('buildBtn',c==null?`${BUILD[s.t].ic} ${BUILD[s.t].name} 已满级`:`${BUILD[s.t].ic} ${b.lv?'升级':'建造'}${BUILD[s.t].name}${b.lv?' → '+(b.lv+1)+'级':''} 💰${c}`);$('buildBtn').classList.toggle('poor',c==null||G.gold<c)}else setH('buildBtn',true);
+ setH('nightBtn',!day);
+ const W=WEAPONS[p.weapon];setH('skillBtn',G.phase!=='night');setT('skillName',W.skill.name);setT('skillCd',p.skillCd>0?''+Math.ceil(p.skillCd):'');
+ setH('armyBtn',!G.units.length);setT('armyBtn',G.armyLeader===p.id?'🏕️ 回营地':'🐱 跟我来');
+ const tt=tut.text(G);let h=tt;
+ if(!h){if(day)h=s?'点右下角按钮建造 / 升级':'今晚敌人从'+nightDirs(G.night+1).map(d=>DIRS[d].cn).join('、')+'边来 · 准备好就入夜';
+  else if(G.phase==='night')h=p.dead?`${DOGS[p.dog].name}复活中… ${Math.ceil(p.respawn)}`:`敌人还剩 ${G.enemies.length+G.spawnQ.length} 个 · 靠近敌人会自动攻击`;else h=''}
+ setT('hint',h);$('hint').classList.toggle('tut',!!tt);
+ Game.view.guide=day&&(tut.step===1||tut.step===0)&&!G.night?(guideSpot(G,p)||{}).id||null:null}
 // ---- 主循环 ----
-let last=performance.now();
+let last=performance.now(),fpsN=0,fpsT=0;const showFps=/fps/.test(location.search);
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const G=Game.G;
- if(G&&G.phase!=='win'&&G.phase!=='lose'&&$('start').classList.contains('hidden')){G.input[G.me]=readInput();Game.step(dt)}
- Game.render();hud();requestAnimationFrame(frame)}
-renderStart();requestAnimationFrame(frame);
+ if(G&&!paused&&G.phase!=='win'&&G.phase!=='lose'&&$('start').classList.contains('hidden')){G.input[G.me]=readInput();Game.step(dt)}
+ Game.render();hud();if(showFps){fpsN++;fpsT+=dt;if(fpsT>1){$('hint').textContent+=' · '+fpsN+'fps';fpsN=0;fpsT=0}}requestAnimationFrame(frame)}
+renderStart();measure();requestAnimationFrame(frame);
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});

@@ -41,3 +41,26 @@ canvas#map{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .test{display:block;margin-top:8px;font-size:12px;color:#a0784f}
 .rec{font-size:12px;margin:4px 0 0;color:#a0784f}
 .bigic{font-size:54px}.unl{color:#e8743b;font-weight:800}
+
+/* v0.2 手机体验 */
+button{touch-action:manipulation;font-family:inherit}
+#pauseBtn{pointer-events:auto;margin-left:auto;width:40px;height:40px;border-radius:50%;border:2px solid #6b4a32;background:#fff8e7;font-size:17px;box-shadow:0 2px 0 #6b4a32;padding:0;color:#7a4b1d}
+#pauseBtn[data-m="1"]::after{content:'🔇';position:absolute;font-size:10px;margin:22px 0 0 -6px}
+.act{min-height:52px;font-size:16px;padding:12px 16px}
+.act.round{width:86px;height:86px;font-size:15px}
+#joy{width:136px;height:136px}#knob{left:40px;top:40px;width:56px;height:56px}
+#joy.float{opacity:.9;transition:none}
+#hint{font-size:13.5px;max-width:92vw;white-space:normal;text-align:center}
+#hint.tut{background:#ff8c42;color:#fff;border-color:#fff;font-size:15px;padding:6px 14px;box-shadow:0 3px 0 #d0643a;animation:tutp 1.4s ease-in-out infinite}
+@keyframes tutp{50%{transform:translateX(-50%) scale(1.05)}}
+#toast{font-size:15px;max-width:92vw;white-space:normal;text-align:center}
+.pill.bump{animation:bump .25s}@keyframes bump{50%{transform:scale(1.18);background:#fff3a0}}
+.sm{border:0;background:#f0d6ae;color:#7a4b1d;font-weight:800;border-radius:12px;padding:9px 14px;font-size:14px;flex:1}
+@media (orientation:landscape) and (max-height:500px){
+ #hud{left:calc(env(safe-area-inset-left) + 8px);right:calc(env(safe-area-inset-right) + 8px);flex-wrap:nowrap}
+ .pill{font-size:13px;padding:2px 8px}.bars{padding:2px 8px;max-width:200px}
+ #hint{top:calc(env(safe-area-inset-top) + 50px)}#toast{top:calc(env(safe-area-inset-top) + 84px)}
+ #acts{gap:8px}.act{min-height:46px;padding:9px 14px;font-size:15px}.act.round{width:76px;height:76px}
+ .ov .card{max-height:none}
+}
+#hud{flex-wrap:nowrap}.bars{min-width:84px}
