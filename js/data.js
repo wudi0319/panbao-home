@@ -113,10 +113,12 @@ const MAPS={
  barbican:{id:'barbican',name:'瓮城',ic:'🏯',desc:'南门外加一圈瓮城，大门错开；西南菜园单独围起来',
   w:34,h:34,gold:22,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.06,ehp:1.02,edmg:1.03},nightsDir:ND_STD,
   terrain:plusTerr(17,17,34,34),spots:[
-   ...coreRing(),...coreBuildings(),
+   ...coreRing(),...coreBuildings().filter(s=>s.id!=='f3'),
    mkWall('wBW',11,25.85,5.7,1,0),mkWall('wBE',23,25.85,5.7,1,0),
    mkWall('wBSW',14.8,28.5,7.6,0,0),mkWall('wBSE',20.7,28.5,4.6,0,GATE_W),
-   mkWall('pN',8.15,23.5,5.3,0,0),mkWall('pW',5.5,26.05,5.1,1,0),mkWall('pS',8.15,28.6,5.3,0,0),mkWall('pE',10.8,26.05,5.1,1,GATE_W)
+   // 西南菜园整圈西移，东门和瓮城西墙之间留出走道，不然门会被堵住
+   mkWall('pN',6.15,23.5,5.3,0,0),mkWall('pW',3.5,26.05,5.1,1,0),mkWall('pS',6.15,28.6,5.3,0,0),mkWall('pE',8.8,26.05,5.1,1,GATE_W),
+   {id:'f3',t:'farm',x:6.0,y:26}
   ]},
  garden:{id:'garden',name:'里外花园',ic:'🌸',desc:'里外两圈围墙，外门和内门错开，中间可以建塔',
   w:34,h:34,gold:26,nights:7,home:{x:17,y:17,r:1.4},diff:{count:1.10,ehp:1.04,edmg:1.05},nightsDir:ND_STD,
@@ -135,7 +137,7 @@ const MAPS={
   spots:[
    ...coreRingAt(11,5.6,23,17, ''),
    mkWall('gW',8.3,21,3.2,0,GATE_W),mkWall('gM',17,21,3.2,0,GATE_W),mkWall('gE',25.7,21,3.2,0,GATE_W),
-   {id:'t1',t:'tower',x:8.3,y:18.0},{id:'t2',t:'tower',x:17,y:18.0},{id:'t3',t:'tower',x:25.7,y:18.0},{id:'t4',t:'tower',x:20.2,y:13.2},
+   {id:'t1',t:'tower',x:8.3,y:18.0},{id:'t2',t:'tower',x:17,y:19.0},{id:'t3',t:'tower',x:25.7,y:18.0},{id:'t4',t:'tower',x:20.2,y:13.2},
    {id:'bC',t:'cats',x:13.6,y:13.4},{id:'bD',t:'ducks',x:20.6,y:8.6},
    {id:'f1',t:'farm',x:13.8,y:8.4},{id:'f2',t:'farm',x:17,y:26.6},{id:'f3',t:'farm',x:8.3,y:26.6}
   ]},
@@ -177,12 +179,12 @@ const MAPS={
    mkWall('cp2',17,21.9,5.0,1,GATE_W),
    mkWall('cp3',17,16.9,5.0,1,GATE_W),
    mkWall('cp4',17,9.2,5.2,0,GATE_W),
-   {id:'t1',t:'tower',x:13.8,y:30.8},{id:'t1b',t:'tower',x:20.2,y:30.8},
+   {id:'t1',t:'tower',x:13.8,y:29.8},{id:'t1b',t:'tower',x:20.2,y:29.8},
    {id:'t2',t:'tower',x:15.0,y:20.6},{id:'t2b',t:'tower',x:19.2,y:20.6},
    {id:'t3',t:'tower',x:15.0,y:15.6},{id:'t3b',t:'tower',x:19.2,y:15.6},
-   {id:'t4',t:'tower',x:14.2,y:7.2},{id:'t4b',t:'tower',x:19.8,y:7.2},
+   {id:'t4',t:'tower',x:15.0,y:7.5},{id:'t4b',t:'tower',x:19.0,y:7.5},
    {id:'bC',t:'cats',x:13.4,y:4.4},{id:'bD',t:'ducks',x:20.6,y:4.4},
-   {id:'f1',t:'farm',x:13.2,y:6.6},{id:'f2',t:'farm',x:20.8,y:6.6}
+   {id:'f1',t:'farm',x:12.2,y:6.8},{id:'f2',t:'farm',x:21.8,y:6.8}
   ]}
 };
 const MAP_ORDER=['yard','barbican','garden','bridge','fields','mountain'];
