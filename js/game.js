@@ -220,32 +220,38 @@ function spawnAt(dir){const D=DIRS[dir],j=(Math.random()-.5)*3;let x=D.x+(dir===
   if(fx!=null){const px=-Math.sin(a),py=Math.cos(a),j2=(Math.random()-.5)*1.2;if(!terrainBlock(fx+px*j2,fy+py*j2,.25)){x=fx+px*j2;y=fy+py*j2}else{x=fx;y=fy}}
   else{x=clamp(x,.6,MAP_W-.6);y=clamp(y,.6,MAP_H-.6)}}
  return{x,y}}
-// 胖宝扔奶瓶：蓄力 / 挥臂 / 跟随，奶瓶比 v0.7.3 小 15%
+// 胖宝扔奶瓶：挥动原图已有的那只手臂（不另画手臂），奶瓶比 v0.7.3 小 15%
 const THROW_WIND=.15,THROW_SWING=.10,THROW_FOLLOW=.20,THROW_MAX=THROW_WIND+THROW_SWING+THROW_FOLLOW,THROW_RELEASE=THROW_WIND+THROW_SWING*.92;
 const BOTTLE_FLY=.493,BOTTLE_HOLD=.493;
-function panbaoBody(){const im=babyImg.idle0,h=T*.94,asp=(im&&im.naturalWidth)?im.naturalWidth/im.naturalHeight:.72,w=h*asp,X=sx(HOME.x),Y=sy(HOME.y+1.95);return{h,w,X,Y,ox:X,oy:Y-h*.55}}
+// 右臂（面向镜头的右侧）在原图上的轮廓 / 肩 / 手，左臂水平翻转
+const ARM_POLY=[[.667,.442],[.827,.442],[.907,.481],[.907,.548],[.867,.654],[.800,.731],[.720,.808],[.667,.923],[.533,.923],[.520,.817],[.587,.731],[.667,.635],[.680,.519]];
+const ARM_SH=[.760,.500],ARM_HAND=[.600,.846];
+function armFlip(side,x){return side<0?1-x:x}
+function armPolyNorm(side){return ARM_POLY.map(([x,y])=>[armFlip(side,x),y])}
 function panbaoPose(){const throwing=(G.home.throwT||0)>0,mx=G.home.throwMax||THROW_MAX,tp=throwing?1-G.home.throwT/mx:-1;
  const face=Math.cos(G.home.throwA||0),side=face>=0?1:-1;
- let lean=0,squash=1,armA=-.2,armL=.82,hold=0,behind=0;
+ let lift=0,hold=0;
  if(tp>=0){const t=tp*mx;
-  if(t<THROW_WIND){const q=t/THROW_WIND,e=q*q*(3-2*q);lean=-.18*e*side;squash=1-.08*e;armA=.2-1.35*e;armL=.8+.08*e;hold=1;behind=e>.35}
-  else if(t<THROW_WIND+THROW_SWING){const q=(t-THROW_WIND)/THROW_SWING,e=q*.4+q*q*.6;lean=(-.18+.5*e)*side;squash=.92+.18*e;armA=-1.15+1.7*e;armL=.88;hold=t<THROW_RELEASE-1e-4?1:0;behind=armA<-.2}
-  else{const q=(t-THROW_WIND-THROW_SWING)/THROW_FOLLOW,u=Math.min(1,q/.3),r=q<.3?0:((k=>(k*k*(3-2*k)))((q-.3)/.7));lean=.28*(1-r)*side;squash=1.1-.16*u*(1-r);armA=.55+.7*u*(1-r)-.4*r;armL=.88-.1*r;hold=0;behind=0}}
- panbaoPose.squash=squash;return{tp,lean,squash,armA,armL,hold,side,behind,face}}
-function panbaoShoulder(b,p){return{shx:p.side*b.w*.3,shy:-b.h*.05,dip:(1-p.squash)*b.h*.12}}
-function panbaoPawScreen(){const b=panbaoBody(),p=panbaoPose(),{shx,shy,dip}=panbaoShoulder(b,p),len=T*p.armL*.6,cl=Math.cos(p.lean),sl=Math.sin(p.lean);
- const ox=b.ox+shx*cl-shy*sl,oy=b.oy+dip+shx*sl+shy*cl,ca=Math.cos(p.armA*p.side),sa=Math.sin(p.armA*p.side),hy=-(len+T*.02);
- return{x:ox-hy*sa,y:oy+hy*ca,body:b,pose:p,len}}
-function panbaoPawWorld(){const s=panbaoPawScreen();return{x:(s.x-VW/2-OX)/T+cam.x,y:(s.y-VH/2-OY)/T+cam.y}}
-function drawPanbaoArm(b,p,part){const {shx,shy}=panbaoShoulder(b,p),len=T*p.armL*.6,th=T*.12,hand=part!=='shaft',shaft=part!=='hand';
- ctx.save();ctx.translate(shx,shy);ctx.rotate(p.armA*p.side);ctx.lineCap=ctx.lineJoin='round';
- if(shaft){ctx.strokeStyle='#3b2a20';ctx.lineWidth=th*1.18;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-len*.32);ctx.stroke();
-  ctx.strokeStyle='#fff6ee';ctx.lineWidth=th;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-len*.32);ctx.stroke();
-  ctx.strokeStyle='#3b2a20';ctx.lineWidth=th*1.08;ctx.beginPath();ctx.moveTo(0,-len*.24);ctx.lineTo(0,-len);ctx.stroke();
-  ctx.strokeStyle='#f3d2b3';ctx.lineWidth=th*.86;ctx.beginPath();ctx.moveTo(0,-len*.24);ctx.lineTo(0,-len);ctx.stroke()}
- if(hand){ctx.fillStyle='#f3d2b3';ctx.strokeStyle='#3b2a20';ctx.lineWidth=T*.032;ctx.beginPath();ctx.arc(0,-len,T*.11,0,7);ctx.fill();ctx.stroke();
-  if(p.hold){ctx.save();ctx.translate(0,-len-T*.02);ctx.rotate(-p.armA*p.side*.3);drawBottle(ctx,T*BOTTLE_HOLD);ctx.restore()}}
- ctx.restore()}
+  if(t<THROW_WIND){const q=t/THROW_WIND,e=q*q*(3-2*q);lift=2.55*e;hold=1}
+  else if(t<THROW_WIND+THROW_SWING){const q=(t-THROW_WIND)/THROW_SWING,e=q*.4+q*q*.6;lift=2.55-1.0*e;hold=t<THROW_RELEASE-1e-4?1:0}
+  else{const q=(t-THROW_WIND-THROW_SWING)/THROW_FOLLOW,u=Math.min(1,q/.35),r=q<.35?0:((k=>(k*k*(3-2*k)))((q-.35)/.65));lift=(1.55-.45*u)*(1-r);hold=0}}
+ return{tp,lift,hold,side,face,rot:-side*lift}}
+function panbaoLayout(im){const h=T*.94,w=h*((im&&im.naturalWidth)?im.naturalWidth/im.naturalHeight:.72),X=sx(HOME.x),Y=sy(HOME.y+1.95);return{h,w,ox:X,oy:Y-h*.55,im}}
+function imgToLocal(nx,ny,w,h){return{x:w*(nx-.5),y:-h*.45+h*ny}}
+const _armC={};
+function armSprite(im,side){const k=(im.src||'')+'|'+side+'|'+im.naturalWidth;if(_armC[k])return _armC[k];
+ const iw=im.naturalWidth,ih=im.naturalHeight,c=document.createElement('canvas');c.width=iw;c.height=ih;const g=c.getContext('2d');
+ g.beginPath();armPolyNorm(side).forEach(([x,y],i)=>{const X=x*iw,Y=y*ih;i?g.lineTo(X,Y):g.moveTo(X,Y)});g.closePath();g.save();g.clip();g.drawImage(im,0,0);g.restore();
+ _armC[k]=c;return c}
+function hideOrigArm(im,w,h,side){ctx.save();ctx.beginPath();armPolyNorm(side).forEach(([nx,ny],i)=>{const p=imgToLocal(nx,ny,w,h);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)});ctx.closePath();ctx.clip();
+ const mid=imgToLocal(armFlip(side,.68),.68,w,h);
+ const stamp=(nx,ny)=>{const t=imgToLocal(armFlip(side,nx),ny,w,h),dx=t.x-mid.x,dy=t.y-mid.y;for(const k of[.3,.55,.85])ctx.drawImage(im,-w/2+dx*k,-h*.45+dy*k,w,h)};
+ stamp(.5,.64);stamp(.82,.84);ctx.restore()}
+function panbaoPawLocal(w,h,pose){const sh=imgToLocal(armFlip(pose.side,ARM_SH[0]),ARM_SH[1],w,h),hd=imgToLocal(armFlip(pose.side,ARM_HAND[0]),ARM_HAND[1],w,h);
+ const hx=hd.x-sh.x,hy=hd.y-sh.y,ca=Math.cos(pose.rot),sa=Math.sin(pose.rot);
+ return{x:sh.x+hx*ca-hy*sa,y:sh.y+hx*sa+hy*ca,sh}}
+function panbaoPawWorld(){const im=babyImg.idle0,L=panbaoLayout(im),p=panbaoPose(),paw=panbaoPawLocal(L.w,L.h,p);
+ return{x:(L.ox+paw.x-VW/2-OX)/T+cam.x,y:(L.oy+paw.y-VH/2-OY)/T+cam.y}}
 
 function step(dt){if(!G||G.phase==='win'||G.phase==='lose')return;G.t+=dt;G.dark+=((G.phase==='night'?1:0)-G.dark)*Math.min(1,dt*1.5);
  for(const p of Object.values(G.players))stepPlayer(p,dt);
@@ -400,13 +406,18 @@ function drawBottle(c,sc){c.save();c.scale(sc,sc);c.lineJoin=c.lineCap='round';c
  c.beginPath();c.moveTo(-.12,-.34);c.lineTo(-.08,-.58);c.lineTo(.08,-.58);c.lineTo(.12,-.34);c.closePath();c.fillStyle='#ff8ea0';c.fill();c.stroke();
  c.beginPath();c.ellipse(0,-.62,.1,.08,0,0,7);c.fillStyle='#ff6b8a';c.fill();c.stroke();c.restore()}
 function drawPanbao(){const cry=G.home.hurtT>0||G.home.hp<G.home.max*.4,throwing=(G.home.throwT||0)>0;
- const fr=(cry?'cry':throwing?'idle':G.phase==='day'?'laugh':'idle')+(Math.floor(performance.now()/(throwing?160:450))%2),im=babyImg[fr];
+ const fr=throwing?(cry?'cry0':'idle0'):((cry?'cry':G.phase==='day'?'laugh':'idle')+(Math.floor(performance.now()/450)%2)),im=babyImg[fr];
  if(!(im&&im.complete&&im.naturalWidth))return;
- const p=panbaoPose(),b=panbaoBody(),h=b.h,w=h*im.naturalWidth/im.naturalHeight,dip=(1-p.squash)*h*.12;
- ctx.save();ctx.translate(b.ox,b.oy+dip);ctx.rotate(p.lean);
- if(throwing&&p.behind)drawPanbaoArm({h,w},p,'shaft');
+ const L=panbaoLayout(im),h=L.h,w=h*im.naturalWidth/im.naturalHeight;
+ ctx.save();ctx.translate(L.ox,L.oy);
+ if(!throwing){ctx.drawImage(im,-w/2,-h*.45,w,h);ctx.restore();return}
+ const p=panbaoPose();
  ctx.drawImage(im,-w/2,-h*.45,w,h);
- if(throwing)drawPanbaoArm({h,w},p,p.behind?'hand':'all');
+ hideOrigArm(im,w,h,p.side);
+ const paw=panbaoPawLocal(w,h,p),arm=armSprite(im,p.side);
+ ctx.save();ctx.translate(paw.sh.x,paw.sh.y);ctx.rotate(p.rot);ctx.translate(-paw.sh.x,-paw.sh.y);
+ ctx.drawImage(arm,-w/2,-h*.45,w,h);ctx.restore();
+ if(p.hold){ctx.save();ctx.translate(paw.x,paw.y);ctx.rotate(p.rot*.25);drawBottle(ctx,T*BOTTLE_HOLD);ctx.restore()}
  ctx.restore()}
 function drawBuilding(s,b){const X=sx(s.x),Y=sy(s.y),u=T;ctx.save();if(b.dead)ctx.globalAlpha=.45;if(b.flash>0)ctx.filter='brightness(1.8)';ctx.lineWidth=2;ctx.strokeStyle='#3b2a20';ctx.lineJoin='round';
  if(s.t==='wall'){drawWallSpot(s,b)}
