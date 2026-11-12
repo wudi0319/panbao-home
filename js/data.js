@@ -1,5 +1,8 @@
 // 保卫胖宝 — 游戏数据（武器 / 天赋 / 建筑 / 敌人 / 地图 / 每晚的敌人）
-const DOGS={yellow:{name:'鸡毛',ic:'🐶'},white:{name:'小白',ic:'🐩'}};
+// 角色天生被动（不用星星）：fat=每夜加生命上限，greedy=敌人掉零食、吃了加攻速
+const PASSIVE={fatPct:.03,snackP:.15,snackBoss:1,snackLife:10,snackMax:10,feastT:5,feastAs:1.2,pickR:.8};
+const DOGS={yellow:{name:'鸡毛',ic:'🐶',passive:{id:'fat',name:'肥胖',ic:'🍖',desc:'每过一夜胖一圈：最大生命 +3%（第 7 夜约 +18%）',toast:'又胖了一圈'}},
+ white:{name:'小白',ic:'🐩',passive:{id:'greedy',name:'贪吃',ic:'🍪',desc:'打倒敌人有机会掉小饼干，走过去吃掉：攻速 +20%，持续 5 秒',snack:'小饼干',art:'cookie'}}};
 const WEAPONS={
  spatula:{name:'锅铲',ic:'🍳',desc:'近战，前方 180° 扇面挥铲，扇内每个敌人都受伤',kind:'melee',range:1.5,dmg:16,cd:.45,
   skill:{name:'旋风锅铲',cd:9,desc:'转圈拍飞身边所有敌人'}},
